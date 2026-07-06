@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -56,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.yangjim.negativeviewer.camera.CameraXController
+import com.yangjim.negativeviewer.camera.CameraLens
 import com.yangjim.negativeviewer.camera.ImageCaptureController
 import com.yangjim.negativeviewer.gl.CameraGlView
 import com.yangjim.negativeviewer.processing.StitchComposer
@@ -122,6 +124,8 @@ fun CameraScreen(
     var showToneControls by remember { mutableStateOf(false) }
     var showRgbControls by remember { mutableStateOf(false) }
     var focusIndicator by remember { mutableStateOf<FocusIndicator?>(null) }
+    var availableLenses by remember { mutableStateOf(emptyList<CameraLens>()) }
+    var selectedCameraId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(focusIndicator) {
         val indicator = focusIndicator
@@ -133,13 +137,20 @@ fun CameraScreen(
         }
     }
 
-    DisposableEffect(lifecycleOwner, cameraGlView) {
+    DisposableEffect(lifecycleOwner, cameraGlView, selectedCameraId) {
         val glView = cameraGlView
         if (glView != null) {
             cameraXController.bindCameraToSurfaceProvider(
                 context = context,
                 lifecycleOwner = lifecycleOwner,
                 surfaceProvider = glView.surfaceProvider(),
+                selectedCameraId = selectedCameraId,
+                onAvailableLensesChanged = { lenses ->
+                    availableLenses = lenses
+                    if (selectedCameraId == null || lenses.none { it.cameraId == selectedCameraId }) {
+                        selectedCameraId = lenses.firstOrNull()?.cameraId
+                    }
+                },
                 onError = { throwable ->
                     onCameraError(throwable.message ?: "Camera preview failed.")
                 },
@@ -207,6 +218,9 @@ fun CameraScreen(
                             locked = lock,
                         )
                     }
+                },
+                onZoom = { scaleFactor ->
+                    cameraXController.zoomBy(scaleFactor)
                 },
                 modifier = Modifier.fillMaxSize(),
             )
@@ -290,12 +304,13 @@ fun CameraScreen(
             )
         }
 
-        if (uiState.previewMode != PreviewMode.NORMAL && (showToneControls || showRgbControls)) {
+        val showActiveRgbControls = showRgbControls && uiState.previewMode != PreviewMode.BW_NEGATIVE
+        if (uiState.previewMode != PreviewMode.NORMAL && (showToneControls || showActiveRgbControls)) {
             ProcessingControls(
                 previewMode = uiState.previewMode,
                 processingParams = uiState.processingParams,
                 showTone = showToneControls,
-                showRgb = showRgbControls,
+                showRgb = showActiveRgbControls,
                 onBrightnessChange = onBrightnessChange,
                 onContrastChange = onContrastChange,
                 onGammaChange = onGammaChange,
@@ -325,20 +340,53 @@ fun CameraScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Button(
-                    onClick = { showToneControls = !showToneControls },
+                    onClick = {
+                        val nextVisible = !showToneControls
+                        showToneControls = nextVisible
+                        if (nextVisible) {
+                            showRgbControls = false
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(text = "Tone")
                 }
                 if (uiState.previewMode != PreviewMode.BW_NEGATIVE) {
                     Button(
-                        onClick = { showRgbControls = !showRgbControls },
+                        onClick = {
+                            val nextVisible = !showRgbControls
+                            showRgbControls = nextVisible
+                            if (nextVisible) {
+                                showToneControls = false
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(text = "RGB")
                     }
                 }
             }
+        }
+
+        if (availableLenses.isNotEmpty()) {
+            LensSelectorButton(
+                lenses = availableLenses,
+                selectedCameraId = selectedCameraId,
+                onSelectNext = {
+                    val currentIndex = availableLenses.indexOfFirst { it.cameraId == selectedCameraId }
+                    val nextIndex = if (currentIndex >= 0) {
+                        (currentIndex + 1).mod(availableLenses.size)
+                    } else {
+                        0
+                    }
+                    selectedCameraId = availableLenses[nextIndex].cameraId
+                    focusIndicator = null
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = 92.dp),
+            )
         }
 
         CaptureButton(
@@ -754,10 +802,34 @@ private fun OrangeMaskMarkerOverlay(
 }
 
 @Composable
+private fun LensSelectorButton(
+    lenses: List<CameraLens>,
+    selectedCameraId: String?,
+    onSelectNext: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val selectedIndex = lenses.indexOfFirst { it.cameraId == selectedCameraId }
+    val label = if (selectedIndex >= 0) {
+        "${selectedIndex + 1}/${lenses.size}"
+    } else {
+        "1/${lenses.size}"
+    }
+
+    Button(
+        enabled = lenses.size > 1,
+        onClick = onSelectNext,
+        modifier = modifier,
+    ) {
+        Text(text = "镜头 $label")
+    }
+}
+
+@Composable
 private fun FocusTouchOverlay(
     enabled: Boolean,
     indicator: FocusIndicator?,
     onFocus: (Float, Float, IntSize, Boolean) -> Unit,
+    onZoom: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var size by remember { mutableStateOf(IntSize.Zero) }
@@ -789,6 +861,14 @@ private fun FocusTouchOverlay(
                         }
                     },
                 )
+            }
+            .pointerInput(enabled) {
+                if (!enabled) return@pointerInput
+                detectTransformGestures { _, _, zoom, _ ->
+                    if (zoom != 1f) {
+                        onZoom(zoom)
+                    }
+                }
             },
     ) {
         val current = indicator ?: return@Canvas
