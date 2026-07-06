@@ -18,11 +18,12 @@ class MediaStoreImageSaver(
     fun saveJpeg(
         sourceFile: File,
         previewMode: PreviewMode,
+        nameSuffix: String = previewMode.name,
     ): Uri {
         var imageUri: Uri? = null
         try {
             val resolver = context.contentResolver
-            val values = createContentValues(previewMode)
+            val values = createContentValues(nameSuffix)
             imageUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
                 ?: error("Failed to create MediaStore image.")
 
@@ -53,10 +54,10 @@ class MediaStoreImageSaver(
         }
     }
 
-    private fun createContentValues(previewMode: PreviewMode): ContentValues {
+    private fun createContentValues(nameSuffix: String): ContentValues {
         val timestamp = SimpleDateFormat(TIME_PATTERN, Locale.US).format(Date())
         return ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, "NEG_${timestamp}_${previewMode.name}.jpg")
+            put(MediaStore.Images.Media.DISPLAY_NAME, "NEG_${timestamp}_$nameSuffix.jpg")
             put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 put(MediaStore.Images.Media.RELATIVE_PATH, RELATIVE_PATH)

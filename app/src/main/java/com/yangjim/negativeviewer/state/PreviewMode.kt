@@ -8,7 +8,8 @@ enum class PreviewMode {
 }
 
 enum class SaveOutputMode {
-    JPEG,
+    PROCESSED_ONLY,
+    ORIGINAL_AND_PROCESSED_STITCH,
 }
 
 enum class CropCorrectionMode {

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
@@ -48,11 +49,13 @@ import com.yangjim.negativeviewer.camera.CameraXController
 import com.yangjim.negativeviewer.camera.ImageCaptureController
 import com.yangjim.negativeviewer.gl.CameraGlView
 import com.yangjim.negativeviewer.processing.NegativeBitmapProcessor
+import com.yangjim.negativeviewer.processing.StitchComposer
 import com.yangjim.negativeviewer.state.CameraUiState
 import com.yangjim.negativeviewer.state.OrangeMaskSample
 import com.yangjim.negativeviewer.state.OrangeMaskSamplingState
 import com.yangjim.negativeviewer.state.ProcessingParams
 import com.yangjim.negativeviewer.state.PreviewMode
+import com.yangjim.negativeviewer.state.SaveOutputMode
 import com.yangjim.negativeviewer.storage.MediaStoreImageSaver
 import com.yangjim.negativeviewer.ui.components.CaptureButton
 import com.yangjim.negativeviewer.ui.components.ModeToggleButton
@@ -75,6 +78,7 @@ fun CameraScreen(
     onStartOrangeMaskSampling: () -> Unit,
     onOrangeMaskSampled: (OrangeMaskSample) -> Unit,
     onResetOrangeMaskSample: () -> Unit,
+    onToggleSaveOutputMode: () -> Unit,
     onCaptureStarted: () -> Unit,
     onCaptureSucceeded: () -> Unit,
     onCaptureFailed: (String) -> Unit,
@@ -87,6 +91,7 @@ fun CameraScreen(
     val imageCaptureController = remember(context) { ImageCaptureController(context) }
     val mediaStoreImageSaver = remember(context) { MediaStoreImageSaver(context) }
     val negativeBitmapProcessor = remember(context) { NegativeBitmapProcessor(context) }
+    val stitchComposer = remember(context) { StitchComposer(context) }
     val coroutineScope = rememberCoroutineScope()
     var cameraGlView by remember { mutableStateOf<CameraGlView?>(null) }
     var markerX by remember { mutableStateOf(0.5f) }
@@ -170,6 +175,16 @@ fun CameraScreen(
                 previewMode = uiState.previewMode,
                 onClick = onToggleMode,
             )
+            if (uiState.previewMode != PreviewMode.NORMAL) {
+                Button(onClick = onToggleSaveOutputMode) {
+                    Text(
+                        text = when (uiState.saveOutputMode) {
+                            SaveOutputMode.PROCESSED_ONLY -> "单图"
+                            SaveOutputMode.ORIGINAL_AND_PROCESSED_STITCH -> "拼接"
+                        },
+                    )
+                }
+            }
         }
 
         if (uiState.previewMode == PreviewMode.COLOR_NEGATIVE_CORRECTED) {
@@ -197,93 +212,125 @@ fun CameraScreen(
             )
         }
 
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(bottom = 24.dp),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            if (uiState.previewMode != PreviewMode.NORMAL) {
-                Column(
-                    horizontalAlignment = Alignment.Start,
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    if (showToneControls || showRgbControls) {
-                        ProcessingControls(
-                            previewMode = uiState.previewMode,
-                            processingParams = uiState.processingParams,
-                            showTone = showToneControls,
-                            showRgb = showRgbControls,
-                            onBrightnessChange = onBrightnessChange,
-                            onContrastChange = onContrastChange,
-                            onGammaChange = onGammaChange,
-                            onRedGainChange = onRedGainChange,
-                            onGreenGainChange = onGreenGainChange,
-                            onBlueGainChange = onBlueGainChange,
-                            onResetTone = onResetTone,
-                            onResetRgb = onResetRgb,
-                        )
+        if (uiState.previewMode != PreviewMode.NORMAL) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .offset(x = (-104).dp)
+                    .padding(bottom = 24.dp),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                if (showToneControls || showRgbControls) {
+                    ProcessingControls(
+                        previewMode = uiState.previewMode,
+                        processingParams = uiState.processingParams,
+                        showTone = showToneControls,
+                        showRgb = showRgbControls,
+                        onBrightnessChange = onBrightnessChange,
+                        onContrastChange = onContrastChange,
+                        onGammaChange = onGammaChange,
+                        onRedGainChange = onRedGainChange,
+                        onGreenGainChange = onGreenGainChange,
+                        onBlueGainChange = onBlueGainChange,
+                        onResetTone = onResetTone,
+                        onResetRgb = onResetRgb,
+                    )
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { showToneControls = !showToneControls }) {
+                        Text(text = "Tone")
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { showToneControls = !showToneControls }) {
-                            Text(text = "Tone")
-                        }
-                        if (uiState.previewMode != PreviewMode.BW_NEGATIVE) {
-                            Button(onClick = { showRgbControls = !showRgbControls }) {
-                                Text(text = "RGB")
-                            }
+                    if (uiState.previewMode != PreviewMode.BW_NEGATIVE) {
+                        Button(onClick = { showRgbControls = !showRgbControls }) {
+                            Text(text = "RGB")
                         }
                     }
                 }
             }
+        }
 
-            CaptureButton(
-                enabled = !uiState.isCapturing,
-                onClick = {
-                    val captureMode = uiState.previewMode
-                    val captureParams = uiState.processingParams
-                    val captureOrangeMaskSample = uiState.orangeMaskSample
-                    onCaptureStarted()
+        CaptureButton(
+            enabled = !uiState.isCapturing,
+            onClick = {
+                val captureMode = uiState.previewMode
+                val captureParams = uiState.processingParams
+                val captureOrangeMaskSample = uiState.orangeMaskSample
+                val captureSaveOutputMode = if (captureMode == PreviewMode.NORMAL) {
+                    SaveOutputMode.PROCESSED_ONLY
+                } else {
+                    uiState.saveOutputMode
+                }
+                onCaptureStarted()
+                try {
                     imageCaptureController.captureToTempFile(
                         imageCapture = cameraXController.getImageCapture(),
                         onSuccess = { rawFile ->
                             coroutineScope.launch {
                                 var fileToSave: java.io.File? = null
+                                var processedFile: java.io.File? = null
                                 try {
-                                    fileToSave = withContext(Dispatchers.Default) {
-                                        negativeBitmapProcessor.createProcessedJpeg(
-                                            sourceFile = rawFile,
-                                            previewMode = captureMode,
-                                            processingParams = captureParams,
-                                            orangeMaskSample = captureOrangeMaskSample,
-                                        )
+                                    val nameSuffix = when {
+                                        captureMode == PreviewMode.NORMAL -> "ORIGINAL"
+                                        captureSaveOutputMode == SaveOutputMode.ORIGINAL_AND_PROCESSED_STITCH ->
+                                            "STITCH_${captureMode.name}"
+                                        else -> captureMode.name
+                                    }
+                                    fileToSave = if (captureMode == PreviewMode.NORMAL) {
+                                        rawFile
+                                    } else {
+                                        processedFile = withContext(Dispatchers.Default) {
+                                            negativeBitmapProcessor.createProcessedJpeg(
+                                                sourceFile = rawFile,
+                                                previewMode = captureMode,
+                                                processingParams = captureParams,
+                                                orangeMaskSample = captureOrangeMaskSample,
+                                            )
+                                        }
+                                        if (captureSaveOutputMode == SaveOutputMode.ORIGINAL_AND_PROCESSED_STITCH) {
+                                            withContext(Dispatchers.Default) {
+                                                stitchComposer.createStitchedJpeg(
+                                                    originalFile = rawFile,
+                                                    processedFile = processedFile ?: error("Processed JPEG missing."),
+                                                )
+                                            }
+                                        } else {
+                                            processedFile
+                                        }
                                     }
                                     val outputFile = fileToSave ?: error("No JPEG output file was created.")
                                     withContext(Dispatchers.IO) {
                                         mediaStoreImageSaver.saveJpeg(
                                             sourceFile = outputFile,
                                             previewMode = captureMode,
+                                            nameSuffix = nameSuffix,
                                         )
                                     }
-                                    rawFile.delete()
+                                    if (outputFile != rawFile) {
+                                        rawFile.delete()
+                                    }
+                                    if (processedFile != null && processedFile != outputFile) {
+                                        processedFile?.delete()
+                                    }
                                     onCaptureSucceeded()
                                 } catch (oom: OutOfMemoryError) {
-                                    rawFile.delete()
-                                    fileToSave?.let { processedFile ->
-                                        if (processedFile != rawFile) {
-                                            processedFile.delete()
-                                        }
+                                    if (fileToSave != rawFile) {
+                                        fileToSave?.delete()
                                     }
+                                    if (processedFile != fileToSave) {
+                                        processedFile?.delete()
+                                    }
+                                    rawFile.delete()
                                     onCaptureFailed("Not enough memory to process image.")
                                 } catch (throwable: Throwable) {
-                                    rawFile.delete()
-                                    fileToSave?.let { processedFile ->
-                                        if (processedFile != rawFile) {
-                                            processedFile.delete()
-                                        }
+                                    if (fileToSave != rawFile) {
+                                        fileToSave?.delete()
                                     }
+                                    if (processedFile != fileToSave) {
+                                        processedFile?.delete()
+                                    }
+                                    rawFile.delete()
                                     onCaptureFailed(throwable.message ?: "Image processing failed.")
                                 }
                             }
@@ -292,9 +339,15 @@ fun CameraScreen(
                             onCaptureFailed(throwable.message ?: "Capture failed.")
                         },
                     )
-                },
-            )
-        }
+                } catch (throwable: Throwable) {
+                    onCaptureFailed(throwable.message ?: "Capture failed.")
+                }
+            },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(bottom = 24.dp),
+        )
 
         uiState.lastError?.let { message ->
             Text(
@@ -403,16 +456,19 @@ private fun OrangeMaskControls(
     onResetSample: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    Row(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top,
     ) {
-        Button(onClick = onStartSampling) {
-            Text(text = if (sample == null) "片基采样" else "重新采样")
-        }
-        if (samplingState == OrangeMaskSamplingState.ARMING) {
-            Button(onClick = onConfirmSample) {
-                Text(text = "确定采样")
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onStartSampling) {
+                Text(text = if (sample == null) "片基采样" else "重新采样")
+            }
+            if (samplingState == OrangeMaskSamplingState.ARMING) {
+                Button(onClick = onConfirmSample) {
+                    Text(text = "确定采样")
+                }
             }
         }
         if (sample != null) {

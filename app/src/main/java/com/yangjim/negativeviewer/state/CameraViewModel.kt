@@ -23,6 +23,11 @@ class CameraViewModel : ViewModel() {
         _uiState.update { state ->
             state.copy(
                 previewMode = mode,
+                saveOutputMode = if (mode == PreviewMode.NORMAL) {
+                    SaveOutputMode.PROCESSED_ONLY
+                } else {
+                    state.saveOutputMode
+                },
                 lastError = if (
                     mode == PreviewMode.COLOR_NEGATIVE_CORRECTED &&
                     state.orangeMaskSample == null
@@ -40,6 +45,22 @@ class CameraViewModel : ViewModel() {
         val currentIndex = modes.indexOf(_uiState.value.previewMode)
         val nextMode = modes[(currentIndex + 1).mod(modes.size)]
         setPreviewMode(nextMode)
+    }
+
+    fun toggleSaveOutputMode() {
+        _uiState.update { state ->
+            if (state.previewMode == PreviewMode.NORMAL) {
+                state.copy(saveOutputMode = SaveOutputMode.PROCESSED_ONLY)
+            } else {
+                state.copy(
+                    saveOutputMode = when (state.saveOutputMode) {
+                        SaveOutputMode.PROCESSED_ONLY -> SaveOutputMode.ORIGINAL_AND_PROCESSED_STITCH
+                        SaveOutputMode.ORIGINAL_AND_PROCESSED_STITCH -> SaveOutputMode.PROCESSED_ONLY
+                    },
+                    lastError = null,
+                )
+            }
+        }
     }
 
     fun setBrightness(value: Float) {

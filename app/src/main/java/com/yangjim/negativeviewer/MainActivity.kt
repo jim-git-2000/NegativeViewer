@@ -106,6 +106,7 @@ private fun NegativeViewerApp(cameraViewModel: CameraViewModel) {
             onStartOrangeMaskSampling = cameraViewModel::startOrangeMaskSampling,
             onOrangeMaskSampled = cameraViewModel::setOrangeMaskSample,
             onResetOrangeMaskSample = cameraViewModel::resetOrangeMaskSample,
+            onToggleSaveOutputMode = cameraViewModel::toggleSaveOutputMode,
             onCaptureStarted = cameraViewModel::onCaptureStarted,
             onCaptureSucceeded = cameraViewModel::onCaptureSucceeded,
             onCaptureFailed = cameraViewModel::onCaptureFailed,

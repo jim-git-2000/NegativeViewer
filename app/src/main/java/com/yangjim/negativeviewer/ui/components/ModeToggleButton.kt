@@ -23,7 +23,7 @@ fun ModeToggleButton(
         modifier = modifier,
         shape = MaterialTheme.shapes.small,
         color = Color.Black.copy(alpha = 0.58f),
-        contentColor = Color.White,
+        contentColor = Color(0xFF7A1E1E),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.38f)),
     ) {
         Text(
