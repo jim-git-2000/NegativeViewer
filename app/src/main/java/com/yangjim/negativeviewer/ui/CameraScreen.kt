@@ -184,7 +184,7 @@ fun CameraScreen(
                 enabled = !orangeMaskMarkerActive,
                 indicator = focusIndicator,
                 onFocus = { normalizedX, normalizedY, previewSize, lock ->
-                    cameraXController.focusAt(
+                    val focusStarted = cameraXController.focusAt(
                         normalizedX = normalizedX,
                         normalizedY = normalizedY,
                         previewWidth = previewSize.width,
@@ -194,11 +194,13 @@ fun CameraScreen(
                             onCaptureFailed(throwable.message ?: "Focus failed.")
                         },
                     )
-                    focusIndicator = FocusIndicator(
-                        normalizedX = normalizedX,
-                        normalizedY = normalizedY,
-                        locked = lock,
-                    )
+                    if (focusStarted) {
+                        focusIndicator = FocusIndicator(
+                            normalizedX = normalizedX,
+                            normalizedY = normalizedY,
+                            locked = lock,
+                        )
+                    }
                 },
                 modifier = Modifier.fillMaxSize(),
             )

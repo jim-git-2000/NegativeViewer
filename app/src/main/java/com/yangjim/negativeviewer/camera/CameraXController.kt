@@ -5,13 +5,14 @@ import android.util.Log
 import androidx.camera.core.Camera
 import androidx.camera.core.AspectRatio
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.DisplayOrientedMeteringPointFactory
 import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.Preview
-import androidx.camera.core.SurfaceOrientedMeteringPointFactory
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
 
 class CameraXController {
@@ -20,6 +21,7 @@ class CameraXController {
     private var camera: Camera? = null
     private var imageCapture: ImageCapture? = null
     private var bindRequestId = 0
+    private var focusRequestId = 0
 
     fun bindCameraToSurfaceProvider(
         context: Context,
@@ -78,21 +80,28 @@ class CameraXController {
         previewHeight: Int,
         lock: Boolean,
         onError: (Throwable) -> Unit,
-    ) {
-        val activeCamera = camera ?: return
-        if (previewWidth <= 0 || previewHeight <= 0) return
+    ): Boolean {
+        val activeCamera = camera ?: return false
+        if (previewWidth <= 0 || previewHeight <= 0) return false
+        val executorContext = appContext ?: return false
+        val requestId = ++focusRequestId
 
-        val meteringFactory = SurfaceOrientedMeteringPointFactory(
+        val meteringFactory = DisplayOrientedMeteringPointFactory(
+            executorContext,
+            activeCamera.cameraInfo,
             previewWidth.toFloat(),
             previewHeight.toFloat(),
         )
         val meteringPoint = meteringFactory.createPoint(
             normalizedX.coerceIn(0f, 1f) * previewWidth,
             normalizedY.coerceIn(0f, 1f) * previewHeight,
+            0.18f,
         )
         val actionBuilder = FocusMeteringAction.Builder(
             meteringPoint,
-            FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE,
+            FocusMeteringAction.FLAG_AF or
+                FocusMeteringAction.FLAG_AE or
+                FocusMeteringAction.FLAG_AWB,
         )
         if (lock) {
             actionBuilder.disableAutoCancel()
@@ -100,19 +109,31 @@ class CameraXController {
             actionBuilder.setAutoCancelDuration(3, TimeUnit.SECONDS)
         }
 
-        val future = activeCamera.cameraControl.startFocusAndMetering(actionBuilder.build())
-        val executorContext = appContext ?: return
+        val action = actionBuilder.build()
+        if (!activeCamera.cameraInfo.isFocusMeteringSupported(action)) {
+            Log.d(TAG, "Focus metering is not supported by this camera")
+            return false
+        }
+
+        val future = activeCamera.cameraControl.startFocusAndMetering(action)
         future.addListener(
             {
+                if (requestId != focusRequestId) return@addListener
                 try {
                     future.get()
                 } catch (throwable: Throwable) {
-                    Log.w(TAG, "Focus metering failed", throwable)
-                    onError(throwable)
+                    val focusThrowable = throwable.unwrapExecutionCause()
+                    if (focusThrowable.isCanceledFocusOperation()) {
+                        Log.d(TAG, "Focus metering was canceled by a newer request")
+                    } else {
+                        Log.w(TAG, "Focus metering failed", focusThrowable)
+                        onError(focusThrowable)
+                    }
                 }
             },
             ContextCompat.getMainExecutor(executorContext),
         )
+        return true
     }
 
     fun unbind() {
@@ -127,8 +148,20 @@ class CameraXController {
             camera = null
             imageCapture = null
             appContext = null
+            focusRequestId++
         }
     }
+
+    private fun Throwable.unwrapExecutionCause(): Throwable =
+        if (this is ExecutionException && cause != null) {
+            cause ?: this
+        } else {
+            this
+        }
+
+    private fun Throwable.isCanceledFocusOperation(): Boolean =
+        this is androidx.camera.core.CameraControl.OperationCanceledException ||
+            message?.contains("Cancelled by another startFocusAndMetering", ignoreCase = true) == true
 
     private companion object {
         const val TAG = "NegativeViewerCamera"
