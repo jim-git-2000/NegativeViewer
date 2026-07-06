@@ -15,7 +15,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -60,25 +62,20 @@ fun CaptureButton(
                         width = size.width - strokeWidth,
                         height = size.height - strokeWidth,
                     )
-                    val topLeft = androidx.compose.ui.geometry.Offset(inset, inset)
-                    val colors = listOf(
-                        Color(0xFF4C1010),
-                        Color(0xFF7A1E1E),
-                        Color(0xFFB04444),
-                        Color(0xFF7A1E1E),
+                    val topLeft = Offset(inset, inset)
+                    drawArc(
+                        brush = Brush.sweepGradient(
+                            0f to Color(0xFF4C1010),
+                            0.5f to Color(0xFFB04444),
+                            1f to Color(0xFF4C1010),
+                        ),
+                        startAngle = -90f,
+                        sweepAngle = 180f,
+                        useCenter = false,
+                        topLeft = topLeft,
+                        size = arcSize,
+                        style = stroke,
                     )
-
-                    colors.forEachIndexed { index, color ->
-                        drawArc(
-                            color = color,
-                            startAngle = -90f + index * 90f,
-                            sweepAngle = 64f,
-                            useCenter = false,
-                            topLeft = topLeft,
-                            size = arcSize,
-                            style = stroke,
-                        )
-                    }
                 }
             }
             Surface(

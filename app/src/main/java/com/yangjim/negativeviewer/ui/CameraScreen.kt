@@ -217,13 +217,26 @@ fun CameraScreen(
             )
         }
 
+        if (
+            uiState.previewMode == PreviewMode.COLOR_NEGATIVE_CORRECTED &&
+            uiState.orangeMaskSample != null
+        ) {
+            OrangeMaskSampleInfo(
+                sample = uiState.orangeMaskSample,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(top = 16.dp, start = 132.dp, end = 132.dp),
+            )
+        }
+
         if (uiState.previewMode != PreviewMode.NORMAL) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .windowInsetsPadding(WindowInsets.navigationBars)
-                    .offset(x = (-124).dp)
-                    .width(300.dp)
+                    .offset(x = 10.dp)
+                    .width(280.dp)
                     .height(390.dp)
                     .padding(bottom = 24.dp),
             ) {
@@ -243,7 +256,7 @@ fun CameraScreen(
                         onResetRgb = onResetRgb,
                         modifier = Modifier
                             .align(Alignment.BottomStart)
-                            .offset(x = 84.dp, y = (-88).dp),
+                            .offset(x = 76.dp, y = (-88).dp),
                     )
                 }
 
@@ -476,69 +489,81 @@ private fun OrangeMaskControls(
     onResetSample: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val samplingActive = samplingState != OrangeMaskSamplingState.IDLE || sample != null
+
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onStartSampling) {
-                Text(text = if (sample == null) "片基采样" else "重新采样")
+            Button(
+                onClick = {
+                    if (samplingActive) {
+                        onResetSample()
+                    } else {
+                        onStartSampling()
+                    }
+                },
+            ) {
+                Text(text = if (samplingActive) "重置片基" else "片基采样")
             }
-            if (samplingState == OrangeMaskSamplingState.ARMING) {
-                Button(onClick = onConfirmSample) {
-                    Text(text = "确定采样")
+            if (samplingActive) {
+                Button(
+                    onClick = {
+                        if (samplingState == OrangeMaskSamplingState.ARMING) {
+                            onConfirmSample()
+                        } else {
+                            onStartSampling()
+                        }
+                    },
+                ) {
+                    Text(
+                        text = if (samplingState == OrangeMaskSamplingState.ARMING) {
+                            "确定采样"
+                        } else {
+                            "重新采样"
+                        },
+                    )
                 }
             }
         }
-        if (sample != null) {
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = Color.Black.copy(alpha = 0.58f),
-                contentColor = Color.White,
-            ) {
-                Column(
-                    modifier = Modifier
-                        .width(132.dp)
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                    horizontalAlignment = Alignment.Start,
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(width = 30.dp, height = 18.dp)
-                                .background(
-                                    Color(
-                                        red = sample.red.coerceIn(0f, 1f),
-                                        green = sample.green.coerceIn(0f, 1f),
-                                        blue = sample.blue.coerceIn(0f, 1f),
-                                    ),
-                                ),
-                        )
-                        Text(
-                            text = "R ${(sample.red * 255f).toInt()} G ${(sample.green * 255f).toInt()} B ${(sample.blue * 255f).toInt()}",
-                            style = MaterialTheme.typography.labelSmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    Button(
-                        onClick = onResetSample,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(32.dp),
-                    ) {
-                        Text(
-                            text = "重置片基",
-                            maxLines = 1,
-                        )
-                    }
-                }
-            }
+    }
+}
+
+@Composable
+private fun OrangeMaskSampleInfo(
+    sample: OrangeMaskSample,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.width(116.dp),
+        shape = MaterialTheme.shapes.small,
+        color = Color.Black.copy(alpha = 0.58f),
+        contentColor = Color.White,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(width = 56.dp, height = 18.dp)
+                    .background(
+                        Color(
+                            red = sample.red.coerceIn(0f, 1f),
+                            green = sample.green.coerceIn(0f, 1f),
+                            blue = sample.blue.coerceIn(0f, 1f),
+                        ),
+                    ),
+            )
+            Text(
+                text = "R ${(sample.red * 255f).toInt()} G ${(sample.green * 255f).toInt()} B ${(sample.blue * 255f).toInt()}",
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
