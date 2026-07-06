@@ -96,6 +96,49 @@ class CameraXController {
         )
     }
 
+    fun bindCameraToSurfaceProvider(
+        context: Context,
+        lifecycleOwner: LifecycleOwner,
+        surfaceProvider: Preview.SurfaceProvider,
+        onError: (Throwable) -> Unit,
+    ) {
+        val appContext = context.applicationContext
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(appContext)
+        val requestId = ++bindRequestId
+
+        cameraProviderFuture.addListener(
+            {
+                try {
+                    if (requestId == bindRequestId) {
+                        val provider = cameraProviderFuture.get()
+                        val preview = Preview.Builder().build().also {
+                            it.setSurfaceProvider(surfaceProvider)
+                        }
+                        val capture = ImageCapture.Builder()
+                            .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                            .build()
+
+                        provider.unbindAll()
+                        provider.bindToLifecycle(
+                            lifecycleOwner,
+                            CameraSelector.DEFAULT_BACK_CAMERA,
+                            preview,
+                            capture,
+                        )
+
+                        cameraProvider = provider
+                        imageCapture = capture
+                        Log.d(TAG, "CameraX preview bound to OpenGL surface")
+                    }
+                } catch (throwable: Throwable) {
+                    Log.e(TAG, "Failed to bind CameraX OpenGL preview", throwable)
+                    onError(throwable)
+                }
+            },
+            ContextCompat.getMainExecutor(appContext),
+        )
+    }
+
     fun getImageCapture(): ImageCapture? = imageCapture
 
     fun unbind() {

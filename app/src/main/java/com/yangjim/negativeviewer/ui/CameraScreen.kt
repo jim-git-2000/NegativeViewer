@@ -13,8 +13,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -54,15 +57,20 @@ fun CameraScreen(
     val mediaStoreImageSaver = remember(context) { MediaStoreImageSaver(context) }
     val negativeBitmapProcessor = remember(context) { NegativeBitmapProcessor(context) }
     val coroutineScope = rememberCoroutineScope()
+    var cameraGlView by remember { mutableStateOf<CameraGlView?>(null) }
 
-    DisposableEffect(lifecycleOwner) {
-        cameraXController.bindImageCaptureOnly(
-            context = context,
-            lifecycleOwner = lifecycleOwner,
-            onError = { throwable ->
-                onCameraError(throwable.message ?: "Camera capture failed.")
-            },
-        )
+    DisposableEffect(lifecycleOwner, cameraGlView) {
+        val glView = cameraGlView
+        if (glView != null) {
+            cameraXController.bindCameraToSurfaceProvider(
+                context = context,
+                lifecycleOwner = lifecycleOwner,
+                surfaceProvider = glView.surfaceProvider(),
+                onError = { throwable ->
+                    onCameraError(throwable.message ?: "Camera preview failed.")
+                },
+            )
+        }
 
         onDispose {
             cameraXController.unbind()
@@ -76,7 +84,9 @@ fun CameraScreen(
     ) {
         AndroidView(
             factory = { viewContext ->
-                CameraGlView(viewContext)
+                CameraGlView(viewContext).also { glView ->
+                    cameraGlView = glView
+                }
             },
             update = { glView ->
                 glView.requestRender()

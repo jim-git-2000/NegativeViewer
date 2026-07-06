@@ -16,6 +16,20 @@ class ShaderProgram(
 
     fun attribLocation(name: String): Int = GLES20.glGetAttribLocation(programId, name)
 
+    fun setInt(name: String, value: Int) {
+        val location = GLES20.glGetUniformLocation(programId, name)
+        if (location >= 0) {
+            GLES20.glUniform1i(location, value)
+        }
+    }
+
+    fun setMat4(name: String, value: FloatArray) {
+        val location = GLES20.glGetUniformLocation(programId, name)
+        if (location >= 0) {
+            GLES20.glUniformMatrix4fv(location, 1, false, value, 0)
+        }
+    }
+
     private fun createProgram(vertexShaderSource: String, fragmentShaderSource: String): Int {
         val vertexShader = compileShader(GLES20.GL_VERTEX_SHADER, vertexShaderSource)
         val fragmentShader = compileShader(GLES20.GL_FRAGMENT_SHADER, fragmentShaderSource)
