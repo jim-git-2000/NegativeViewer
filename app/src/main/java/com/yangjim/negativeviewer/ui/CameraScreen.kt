@@ -28,6 +28,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.camera.view.PreviewView
 import com.yangjim.negativeviewer.camera.CameraXController
+import com.yangjim.negativeviewer.camera.ImageCaptureController
 import com.yangjim.negativeviewer.state.CameraUiState
 import com.yangjim.negativeviewer.ui.components.CaptureButton
 import com.yangjim.negativeviewer.ui.components.ModeToggleButton
@@ -36,19 +37,22 @@ import com.yangjim.negativeviewer.ui.components.ModeToggleButton
 fun CameraScreen(
     uiState: CameraUiState,
     onToggleMode: () -> Unit,
-    onCapture: () -> Unit,
+    onCaptureStarted: () -> Unit,
+    onCaptureSucceeded: (String) -> Unit,
+    onCaptureFailed: (String) -> Unit,
     onCameraError: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraXController = remember { CameraXController() }
+    val imageCaptureController = remember(context) { ImageCaptureController(context) }
     var previewView by remember { mutableStateOf<PreviewView?>(null) }
 
     DisposableEffect(lifecycleOwner, previewView) {
         val view = previewView
         if (view != null) {
-            cameraXController.bindPreview(
+            cameraXController.bindCamera(
                 context = context,
                 lifecycleOwner = lifecycleOwner,
                 previewView = view,
@@ -109,7 +113,18 @@ fun CameraScreen(
 
         CaptureButton(
             enabled = !uiState.isCapturing,
-            onClick = onCapture,
+            onClick = {
+                onCaptureStarted()
+                imageCaptureController.captureToTempFile(
+                    imageCapture = cameraXController.getImageCapture(),
+                    onSuccess = { file ->
+                        onCaptureSucceeded(file.absolutePath)
+                    },
+                    onError = { throwable ->
+                        onCaptureFailed(throwable.message ?: "Capture failed.")
+                    },
+                )
+            },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .windowInsetsPadding(WindowInsets.navigationBars)

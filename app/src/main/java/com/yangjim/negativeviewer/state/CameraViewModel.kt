@@ -37,11 +37,32 @@ class CameraViewModel : ViewModel() {
         setPreviewMode(nextMode)
     }
 
-    fun onCaptureClicked() {
+    fun onCaptureStarted() {
         _uiState.update { state ->
             state.copy(
-                lastMessage = "Capture is not implemented yet.",
+                isCapturing = true,
+                lastMessage = "Capturing...",
                 lastError = null,
+            )
+        }
+    }
+
+    fun onCaptureSucceeded(path: String) {
+        _uiState.update { state ->
+            state.copy(
+                isCapturing = false,
+                lastMessage = "Saved raw JPEG to cache: $path",
+                lastError = null,
+            )
+        }
+    }
+
+    fun onCaptureFailed(message: String) {
+        _uiState.update { state ->
+            state.copy(
+                isCapturing = false,
+                lastMessage = null,
+                lastError = message,
             )
         }
     }

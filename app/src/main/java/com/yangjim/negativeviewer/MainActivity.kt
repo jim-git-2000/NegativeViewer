@@ -95,7 +95,9 @@ private fun NegativeViewerApp(cameraViewModel: CameraViewModel) {
         CameraScreen(
             uiState = uiState,
             onToggleMode = cameraViewModel::togglePreviewMode,
-            onCapture = cameraViewModel::onCaptureClicked,
+            onCaptureStarted = cameraViewModel::onCaptureStarted,
+            onCaptureSucceeded = cameraViewModel::onCaptureSucceeded,
+            onCaptureFailed = cameraViewModel::onCaptureFailed,
             onCameraError = cameraViewModel::onCameraError,
             modifier = Modifier.fillMaxSize(),
         )
