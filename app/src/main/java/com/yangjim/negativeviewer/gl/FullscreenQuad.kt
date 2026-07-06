@@ -6,12 +6,23 @@ import java.nio.ByteOrder
 import java.nio.FloatBuffer
 
 class FullscreenQuad {
-    private val vertexBuffer: FloatBuffer = floatBufferOf(
-        -1f, -1f, 0f, 0f,
-        1f, -1f, 1f, 0f,
-        -1f, 1f, 0f, 1f,
-        1f, 1f, 1f, 1f,
-    )
+    private val vertexBuffer: FloatBuffer = floatBufferOf(FloatArray(VERTEX_COUNT * FLOATS_PER_VERTEX))
+
+    init {
+        setScale(1f, 1f)
+    }
+
+    fun setScale(scaleX: Float, scaleY: Float) {
+        val values = floatArrayOf(
+            -scaleX, -scaleY, 0f, 0f,
+            scaleX, -scaleY, 1f, 0f,
+            -scaleX, scaleY, 0f, 1f,
+            scaleX, scaleY, 1f, 1f,
+        )
+        vertexBuffer.position(0)
+        vertexBuffer.put(values)
+        vertexBuffer.position(0)
+    }
 
     fun draw(shaderProgram: ShaderProgram) {
         val positionLocation = shaderProgram.attribLocation("aPosition")
@@ -47,7 +58,7 @@ class FullscreenQuad {
         GLES20.glDisableVertexAttribArray(texCoordLocation)
     }
 
-    private fun floatBufferOf(vararg values: Float): FloatBuffer {
+    private fun floatBufferOf(values: FloatArray): FloatBuffer {
         return ByteBuffer
             .allocateDirect(values.size * BYTES_PER_FLOAT)
             .order(ByteOrder.nativeOrder())
@@ -62,7 +73,8 @@ class FullscreenQuad {
         const val POSITION_SIZE = 2
         const val TEX_COORD_SIZE = 2
         const val VERTEX_COUNT = 4
+        const val FLOATS_PER_VERTEX = POSITION_SIZE + TEX_COORD_SIZE
         const val BYTES_PER_FLOAT = 4
-        const val STRIDE_BYTES = (POSITION_SIZE + TEX_COORD_SIZE) * BYTES_PER_FLOAT
+        const val STRIDE_BYTES = FLOATS_PER_VERTEX * BYTES_PER_FLOAT
     }
 }

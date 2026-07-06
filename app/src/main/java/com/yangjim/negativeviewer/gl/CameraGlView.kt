@@ -9,13 +9,21 @@ class CameraGlView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
 ) : GLSurfaceView(context, attrs) {
-    private val cameraSurfaceProvider = CameraSurfaceProvider(ContextCompat.getMainExecutor(context))
     private val cameraRenderer = CameraRenderer(
-        cameraSurfaceProvider = cameraSurfaceProvider,
         requestRender = ::requestRender,
+    )
+    private val cameraSurfaceProvider = CameraSurfaceProvider(
+        executor = ContextCompat.getMainExecutor(context),
+        onResolutionChanged = { resolution ->
+            queueEvent {
+                cameraRenderer.setCameraBufferSize(resolution.width, resolution.height)
+            }
+            requestRender()
+        },
     )
 
     init {
+        cameraRenderer.setCameraSurfaceProvider(cameraSurfaceProvider)
         setEGLContextClientVersion(2)
         setRenderer(cameraRenderer)
         renderMode = RENDERMODE_WHEN_DIRTY

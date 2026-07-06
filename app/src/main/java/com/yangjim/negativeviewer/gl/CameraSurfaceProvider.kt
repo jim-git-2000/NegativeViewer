@@ -1,6 +1,7 @@
 package com.yangjim.negativeviewer.gl
 
 import android.graphics.SurfaceTexture
+import android.util.Size
 import android.util.Log
 import android.view.Surface
 import androidx.camera.core.Preview
@@ -9,6 +10,7 @@ import java.util.concurrent.Executor
 
 class CameraSurfaceProvider(
     private val executor: Executor,
+    private val onResolutionChanged: (Size) -> Unit,
 ) : Preview.SurfaceProvider {
     private val lock = Any()
     private var surfaceTexture: SurfaceTexture? = null
@@ -72,6 +74,7 @@ class CameraSurfaceProvider(
 
             val resolution = request.resolution
             texture.setDefaultBufferSize(resolution.width, resolution.height)
+            onResolutionChanged(resolution)
             activeSurface = Surface(texture)
             surfaceProvided = true
         }

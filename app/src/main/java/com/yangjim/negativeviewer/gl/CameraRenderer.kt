@@ -7,16 +7,32 @@ import android.opengl.GLSurfaceView
 import android.util.Log
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
+import kotlin.math.abs
 
 class CameraRenderer(
-    private val cameraSurfaceProvider: CameraSurfaceProvider,
     private val requestRender: () -> Unit,
 ) : GLSurfaceView.Renderer {
     private val textureMatrix = FloatArray(16)
+    private var cameraSurfaceProvider: CameraSurfaceProvider? = null
     private var shaderProgram: ShaderProgram? = null
     private var fullscreenQuad: FullscreenQuad? = null
     private var surfaceTexture: SurfaceTexture? = null
     private var oesTextureId = 0
+    private var viewWidth = 0
+    private var viewHeight = 0
+    private var bufferWidth = 0
+    private var bufferHeight = 0
+
+    fun setCameraSurfaceProvider(provider: CameraSurfaceProvider) {
+        cameraSurfaceProvider = provider
+    }
+
+    fun setCameraBufferSize(width: Int, height: Int) {
+        bufferWidth = width
+        bufferHeight = height
+        updateQuadScale()
+        Log.d(TAG, "Camera buffer size changed: ${width}x$height")
+    }
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         GLES20.glClearColor(0.02f, 0.02f, 0.02f, 1f)
@@ -29,12 +45,16 @@ class CameraRenderer(
         }
         shaderProgram = ShaderProgram(VERTEX_SHADER, FRAGMENT_SHADER)
         fullscreenQuad = FullscreenQuad()
-        cameraSurfaceProvider.setSurfaceTexture(surfaceTexture)
+        updateQuadScale()
+        cameraSurfaceProvider?.setSurfaceTexture(surfaceTexture)
         Log.d(TAG, "OpenGL camera surface created")
     }
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
         GLES20.glViewport(0, 0, width, height)
+        viewWidth = width
+        viewHeight = height
+        updateQuadScale()
         Log.d(TAG, "OpenGL viewport changed: ${width}x$height")
     }
 
@@ -61,7 +81,7 @@ class CameraRenderer(
     }
 
     fun release() {
-        cameraSurfaceProvider.setSurfaceTexture(null)
+        cameraSurfaceProvider?.setSurfaceTexture(null)
         surfaceTexture?.release()
         surfaceTexture = null
         if (oesTextureId != 0) {
@@ -69,6 +89,31 @@ class CameraRenderer(
             oesTextureId = 0
         }
         Log.d(TAG, "OpenGL camera surface released")
+    }
+
+    private fun updateQuadScale() {
+        val quad = fullscreenQuad ?: return
+        if (viewWidth <= 0 || viewHeight <= 0 || bufferWidth <= 0 || bufferHeight <= 0) {
+            quad.setScale(1f, 1f)
+            return
+        }
+
+        val viewAspect = viewWidth.toFloat() / viewHeight.toFloat()
+        val rawBufferAspect = bufferWidth.toFloat() / bufferHeight.toFloat()
+        val rotatedBufferAspect = 1f / rawBufferAspect
+        val bufferAspect = if (
+            abs(rawBufferAspect - viewAspect) <= abs(rotatedBufferAspect - viewAspect)
+        ) {
+            rawBufferAspect
+        } else {
+            rotatedBufferAspect
+        }
+
+        if (bufferAspect > viewAspect) {
+            quad.setScale(bufferAspect / viewAspect, 1f)
+        } else {
+            quad.setScale(1f, viewAspect / bufferAspect)
+        }
     }
 
     private fun createExternalTexture(): Int {
