@@ -8,17 +8,41 @@ android {
     namespace = "com.yangjim.negativeviewer"
     compileSdk = 35
 
+    val releaseKeystorePath = System.getenv("NV_RELEASE_KEYSTORE_PATH")
+    val releaseStorePassword = System.getenv("NV_RELEASE_STORE_PASSWORD")
+    val releaseKeyAlias = System.getenv("NV_RELEASE_KEY_ALIAS")
+    val releaseKeyPassword = System.getenv("NV_RELEASE_KEY_PASSWORD")
+
     defaultConfig {
         applicationId = "com.yangjim.negativeviewer"
         minSdk = 29
         targetSdk = 35
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "1.0.0"
+    }
+
+    signingConfigs {
+        create("release") {
+            if (
+                !releaseKeystorePath.isNullOrBlank() &&
+                !releaseStorePassword.isNullOrBlank() &&
+                !releaseKeyAlias.isNullOrBlank() &&
+                !releaseKeyPassword.isNullOrBlank()
+            ) {
+                storeFile = file(releaseKeystorePath)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            } else {
+                initWith(getByName("debug"))
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -33,6 +57,15 @@ android {
 
     buildFeatures {
         compose = true
+    }
+}
+
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        val releaseVersion = variant.versionName.orNull ?: "1.0.0"
+        variant.outputs.forEach { output ->
+            output.outputFileName.set("NegativeViewer-Android-v$releaseVersion.apk")
+        }
     }
 }
 

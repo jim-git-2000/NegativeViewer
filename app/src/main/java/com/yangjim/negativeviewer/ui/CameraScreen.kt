@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
@@ -67,6 +68,9 @@ import com.yangjim.negativeviewer.ui.components.ModeToggleButton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private val LeftControlColumnWidth = 118.dp
+private val LeftControlHorizontalPadding = 16.dp
 
 @Composable
 fun CameraScreen(
@@ -213,7 +217,7 @@ fun CameraScreen(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(16.dp),
+                    .padding(start = LeftControlHorizontalPadding, top = 16.dp),
             )
         }
 
@@ -252,27 +256,30 @@ fun CameraScreen(
         }
 
         if (uiState.previewMode != PreviewMode.NORMAL) {
-            Box(
+            Column(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .windowInsetsPadding(WindowInsets.navigationBars)
-                    .offset(x = (-88).dp)
-                    .width(280.dp)
-                    .height(390.dp)
-                    .padding(bottom = 24.dp),
+                    .align(Alignment.BottomStart)
+                    .navigationBarsPadding()
+                    .padding(
+                        start = LeftControlHorizontalPadding,
+                        bottom = 24.dp,
+                    )
+                    .width(LeftControlColumnWidth),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Column(
-                    modifier = Modifier.align(Alignment.BottomStart),
-                    horizontalAlignment = Alignment.Start,
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                Button(
+                    onClick = { showToneControls = !showToneControls },
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Button(onClick = { showToneControls = !showToneControls }) {
-                        Text(text = "Tone")
-                    }
-                    if (uiState.previewMode != PreviewMode.BW_NEGATIVE) {
-                        Button(onClick = { showRgbControls = !showRgbControls }) {
-                            Text(text = "RGB")
-                        }
+                    Text(text = "Tone")
+                }
+                if (uiState.previewMode != PreviewMode.BW_NEGATIVE) {
+                    Button(
+                        onClick = { showRgbControls = !showRgbControls },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(text = "RGB")
                     }
                 }
             }
@@ -492,41 +499,41 @@ private fun OrangeMaskControls(
 ) {
     val samplingActive = samplingState != OrangeMaskSamplingState.IDLE || sample != null
 
-    Row(
+    Column(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.Top,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(
+            onClick = {
+                if (samplingActive) {
+                    onResetSample()
+                } else {
+                    onStartSampling()
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(text = if (samplingActive) "重置片基" else "片基采样")
+        }
+        if (samplingActive) {
             Button(
                 onClick = {
-                    if (samplingActive) {
-                        onResetSample()
+                    if (samplingState == OrangeMaskSamplingState.ARMING) {
+                        onConfirmSample()
                     } else {
                         onStartSampling()
                     }
                 },
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(text = if (samplingActive) "重置片基" else "片基采样")
-            }
-            if (samplingActive) {
-                Button(
-                    onClick = {
-                        if (samplingState == OrangeMaskSamplingState.ARMING) {
-                            onConfirmSample()
-                        } else {
-                            onStartSampling()
-                        }
+                Text(
+                    text = if (samplingState == OrangeMaskSamplingState.ARMING) {
+                        "确定采样"
+                    } else {
+                        "重新采样"
                     },
-                ) {
-                    Text(
-                        text = if (samplingState == OrangeMaskSamplingState.ARMING) {
-                            "确定采样"
-                        } else {
-                            "重新采样"
-                        },
-                    )
-                }
+                )
             }
         }
     }

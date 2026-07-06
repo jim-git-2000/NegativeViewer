@@ -1,0 +1,68 @@
+name: Android Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Prepare release keystore
+        if: ${{ secrets.NV_RELEASE_KEYSTORE_BASE64 != '' }}
+        shell: bash
+        run: |
+          echo "${{ secrets.NV_RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/nv-release.keystore"
+
+      - name: Make Gradle executable
+        run: chmod +x ./gradlew
+
+      - name: Build release APK
+        env:
+          NV_RELEASE_KEYSTORE_PATH: ${{ secrets.NV_RELEASE_KEYSTORE_BASE64 != '' && format('{0}/nv-release.keystore', runner.temp) || '' }}
+          NV_RELEASE_STORE_PASSWORD: ${{ secrets.NV_RELEASE_STORE_PASSWORD }}
+          NV_RELEASE_KEY_ALIAS: ${{ secrets.NV_RELEASE_KEY_ALIAS }}
+          NV_RELEASE_KEY_PASSWORD: ${{ secrets.NV_RELEASE_KEY_PASSWORD }}
+        run: ./gradlew :app:assembleRelease --stacktrace
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: false
+          body: |
+            Negative Viewer Android 当前版本发布。
+
+            版本：${{ github.ref_name }}
+            平台：Android
+
+            本版本主要功能：
+            - 支持 NORMAL、COLOR、B&W、COLOR+ 四种预览模式
+            - 支持 Tone 参数调整：Brightness / Contrast / Gamma
+            - 支持 RGB 三通道增益调节
+            - COLOR+ 模式支持片基采样、重新采样与重置片基
+            - 支持单图保存和原图 + 处理图拼接保存
+            - Release 附件提供可直接下载的 APK
+          files: |
+            app/build/outputs/apk/release/NegativeViewer-Android-*.apk
+
