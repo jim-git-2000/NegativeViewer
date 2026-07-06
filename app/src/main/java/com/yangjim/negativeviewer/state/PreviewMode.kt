@@ -17,8 +17,8 @@ enum class CropCorrectionMode {
 
 enum class OrangeMaskSamplingState {
     IDLE,
-    SAMPLING,
-    SAMPLED,
+    ARMING,
+    LOCKED,
 }
 
 data class OrangeMaskSample(

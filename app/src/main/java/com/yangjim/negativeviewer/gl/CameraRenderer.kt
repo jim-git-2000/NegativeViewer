@@ -5,11 +5,14 @@ import android.opengl.GLES11Ext
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
 import android.util.Log
+import com.yangjim.negativeviewer.state.OrangeMaskSample
 import com.yangjim.negativeviewer.state.ProcessingParams
 import com.yangjim.negativeviewer.state.PreviewMode
+import java.nio.ByteBuffer
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 class CameraRenderer(
     private val requestRender: () -> Unit,
@@ -26,6 +29,8 @@ class CameraRenderer(
     private var bufferHeight = 0
     private var previewMode = PreviewMode.COLOR_BASIC_INVERT
     private var processingParams = ProcessingParams.Default
+    private var orangeMaskSample: OrangeMaskSample? = null
+    private var pendingSampleRequest: PendingSampleRequest? = null
 
     fun setCameraSurfaceProvider(provider: CameraSurfaceProvider) {
         cameraSurfaceProvider = provider
@@ -45,6 +50,24 @@ class CameraRenderer(
 
     fun setProcessingParams(processingParams: ProcessingParams) {
         this.processingParams = processingParams
+        requestRender()
+    }
+
+    fun setOrangeMaskSample(sample: OrangeMaskSample?) {
+        orangeMaskSample = sample
+        requestRender()
+    }
+
+    fun requestOrangeMaskSample(
+        normalizedX: Float,
+        normalizedY: Float,
+        onResult: (Result<OrangeMaskSample>) -> Unit,
+    ) {
+        pendingSampleRequest = PendingSampleRequest(
+            normalizedX = normalizedX.coerceIn(0f, 1f),
+            normalizedY = normalizedY.coerceIn(0f, 1f),
+            onResult = onResult,
+        )
         requestRender()
     }
 
@@ -84,24 +107,18 @@ class CameraRenderer(
             }
         }
 
-        shaderProgram?.use {
-            setInt("uCameraTexture", 0)
-            setInt("uPreviewMode", previewMode.ordinal)
-            setFloat("uBrightness", processingParams.brightness)
-            setFloat("uContrast", processingParams.contrast)
-            setFloat("uGamma", processingParams.gamma.coerceAtLeast(MIN_GAMMA))
-            setFloat3(
-                "uRgbGain",
-                processingParams.redGain,
-                processingParams.greenGain,
-                processingParams.blueGain,
-            )
-            setMat4("uTexMatrix", textureMatrix)
-            GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
-            GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, oesTextureId)
-            fullscreenQuad?.draw(this)
-            GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, 0)
+        val sampleRequest = pendingSampleRequest
+        if (sampleRequest != null) {
+            pendingSampleRequest = null
+            try {
+                drawCameraFrame(forcePreviewMode = PreviewMode.NORMAL)
+                sampleRequest.onResult(Result.success(readOrangeMaskSample(sampleRequest)))
+            } catch (throwable: Throwable) {
+                sampleRequest.onResult(Result.failure(throwable))
+            }
         }
+
+        drawCameraFrame(forcePreviewMode = null)
     }
 
     fun release() {
@@ -169,8 +186,87 @@ class CameraRenderer(
         return textureId
     }
 
+    private fun drawCameraFrame(forcePreviewMode: PreviewMode?) {
+        val mode = forcePreviewMode ?: previewMode
+        val sample = orangeMaskSample
+
+        shaderProgram?.use {
+            setInt("uCameraTexture", 0)
+            setInt("uPreviewMode", mode.ordinal)
+            setInt("uHasOrangeMaskSample", if (sample != null) 1 else 0)
+            setFloat("uBrightness", processingParams.brightness)
+            setFloat("uContrast", processingParams.contrast)
+            setFloat("uGamma", processingParams.gamma.coerceAtLeast(MIN_GAMMA))
+            setFloat3(
+                "uRgbGain",
+                processingParams.redGain,
+                processingParams.greenGain,
+                processingParams.blueGain,
+            )
+            setFloat3(
+                "uOrangeMaskSample",
+                sample?.red ?: 1f,
+                sample?.green ?: 1f,
+                sample?.blue ?: 1f,
+            )
+            setMat4("uTexMatrix", textureMatrix)
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+            GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, oesTextureId)
+            fullscreenQuad?.draw(this)
+            GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, 0)
+        }
+    }
+
+    private fun readOrangeMaskSample(request: PendingSampleRequest): OrangeMaskSample {
+        if (viewWidth <= 0 || viewHeight <= 0) {
+            error("Preview is not ready for sampling.")
+        }
+
+        val sampleSize = minOf(9, viewWidth, viewHeight)
+        val centerX = (request.normalizedX * (viewWidth - 1)).roundToInt()
+        val centerY = ((1f - request.normalizedY) * (viewHeight - 1)).roundToInt()
+        val left = (centerX - sampleSize / 2).coerceIn(0, (viewWidth - sampleSize).coerceAtLeast(0))
+        val bottom = (centerY - sampleSize / 2).coerceIn(0, (viewHeight - sampleSize).coerceAtLeast(0))
+        val buffer = ByteBuffer.allocateDirect(sampleSize * sampleSize * BYTES_PER_PIXEL)
+
+        GLES20.glReadPixels(
+            left,
+            bottom,
+            sampleSize,
+            sampleSize,
+            GLES20.GL_RGBA,
+            GLES20.GL_UNSIGNED_BYTE,
+            buffer,
+        )
+
+        var red = 0
+        var green = 0
+        var blue = 0
+        val pixelCount = sampleSize * sampleSize
+        buffer.position(0)
+        repeat(pixelCount) {
+            red += buffer.get().toInt() and 0xff
+            green += buffer.get().toInt() and 0xff
+            blue += buffer.get().toInt() and 0xff
+            buffer.get()
+        }
+
+        return OrangeMaskSample(
+            red = red / (pixelCount * 255f),
+            green = green / (pixelCount * 255f),
+            blue = blue / (pixelCount * 255f),
+        )
+    }
+
+    private data class PendingSampleRequest(
+        val normalizedX: Float,
+        val normalizedY: Float,
+        val onResult: (Result<OrangeMaskSample>) -> Unit,
+    )
+
     private companion object {
         const val TAG = "NegativeViewerGL"
+        const val BYTES_PER_PIXEL = 4
 
         const val VERTEX_SHADER = """
             attribute vec4 aPosition;
@@ -192,10 +288,12 @@ class CameraRenderer(
 
             uniform samplerExternalOES uCameraTexture;
             uniform int uPreviewMode;
+            uniform int uHasOrangeMaskSample;
             uniform float uBrightness;
             uniform float uContrast;
             uniform float uGamma;
             uniform vec3 uRgbGain;
+            uniform vec3 uOrangeMaskSample;
 
             varying vec2 vTexCoord;
 
@@ -206,6 +304,13 @@ class CameraRenderer(
                 return pow(color, vec3(1.0 / max(uGamma, 0.1)));
             }
 
+            vec3 applyOrangeMaskCorrection(vec3 color) {
+                float epsilon = 0.001;
+                float scale = max(max(uOrangeMaskSample.r, uOrangeMaskSample.g), uOrangeMaskSample.b);
+                vec3 normalized = color / max(uOrangeMaskSample, vec3(epsilon)) * scale;
+                return clamp(normalized, 0.0, 1.0);
+            }
+
             void main() {
                 vec4 color = texture2D(uCameraTexture, vTexCoord);
                 if (uPreviewMode == 0) {
@@ -213,6 +318,10 @@ class CameraRenderer(
                 } else if (uPreviewMode == 2) {
                     float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114));
                     vec3 processed = vec3(1.0 - gray);
+                    gl_FragColor = vec4(applyTone(processed), color.a);
+                } else if (uPreviewMode == 3 && uHasOrangeMaskSample == 1) {
+                    vec3 normalized = applyOrangeMaskCorrection(color.rgb);
+                    vec3 processed = (1.0 - normalized) * uRgbGain;
                     gl_FragColor = vec4(applyTone(processed), color.a);
                 } else {
                     vec3 processed = (1.0 - color.rgb) * uRgbGain;

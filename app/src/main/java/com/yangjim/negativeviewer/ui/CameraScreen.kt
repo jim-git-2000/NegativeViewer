@@ -1,9 +1,13 @@
 package com.yangjim.negativeviewer.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,10 +32,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -40,6 +49,8 @@ import com.yangjim.negativeviewer.camera.ImageCaptureController
 import com.yangjim.negativeviewer.gl.CameraGlView
 import com.yangjim.negativeviewer.processing.NegativeBitmapProcessor
 import com.yangjim.negativeviewer.state.CameraUiState
+import com.yangjim.negativeviewer.state.OrangeMaskSample
+import com.yangjim.negativeviewer.state.OrangeMaskSamplingState
 import com.yangjim.negativeviewer.state.ProcessingParams
 import com.yangjim.negativeviewer.state.PreviewMode
 import com.yangjim.negativeviewer.storage.MediaStoreImageSaver
@@ -61,6 +72,9 @@ fun CameraScreen(
     onBlueGainChange: (Float) -> Unit,
     onResetTone: () -> Unit,
     onResetRgb: () -> Unit,
+    onStartOrangeMaskSampling: () -> Unit,
+    onOrangeMaskSampled: (OrangeMaskSample) -> Unit,
+    onResetOrangeMaskSample: () -> Unit,
     onCaptureStarted: () -> Unit,
     onCaptureSucceeded: () -> Unit,
     onCaptureFailed: (String) -> Unit,
@@ -75,6 +89,10 @@ fun CameraScreen(
     val negativeBitmapProcessor = remember(context) { NegativeBitmapProcessor(context) }
     val coroutineScope = rememberCoroutineScope()
     var cameraGlView by remember { mutableStateOf<CameraGlView?>(null) }
+    var markerX by remember { mutableStateOf(0.5f) }
+    var markerY by remember { mutableStateOf(0.5f) }
+    var showToneControls by remember { mutableStateOf(false) }
+    var showRgbControls by remember { mutableStateOf(false) }
 
     DisposableEffect(lifecycleOwner, cameraGlView) {
         val glView = cameraGlView
@@ -99,25 +117,46 @@ fun CameraScreen(
             .fillMaxSize()
             .background(Color.Black),
     ) {
-        AndroidView(
-            factory = { viewContext ->
-                CameraGlView(viewContext).also { glView ->
-                    glView.setPreviewMode(uiState.previewMode)
-                    glView.setProcessingParams(uiState.processingParams)
-                    cameraGlView = glView
-                }
-            },
-            update = { glView ->
-                glView.setPreviewMode(uiState.previewMode)
-                glView.setProcessingParams(uiState.processingParams)
-                glView.requestRender()
-            },
+        Box(
             modifier = Modifier
                 .align(Alignment.Center)
                 .fillMaxWidth()
                 .aspectRatio(PREVIEW_ASPECT_RATIO)
                 .background(Color.Black),
-        )
+        ) {
+            AndroidView(
+                factory = { viewContext ->
+                    CameraGlView(viewContext).also { glView ->
+                        glView.setPreviewMode(uiState.previewMode)
+                        glView.setProcessingParams(uiState.processingParams)
+                        glView.setOrangeMaskSample(uiState.orangeMaskSample)
+                        cameraGlView = glView
+                    }
+                },
+                update = { glView ->
+                    glView.setPreviewMode(uiState.previewMode)
+                    glView.setProcessingParams(uiState.processingParams)
+                    glView.setOrangeMaskSample(uiState.orangeMaskSample)
+                    glView.requestRender()
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+
+            if (
+                uiState.previewMode == PreviewMode.COLOR_NEGATIVE_CORRECTED &&
+                uiState.orangeMaskSamplingState == OrangeMaskSamplingState.ARMING
+            ) {
+                OrangeMaskMarkerOverlay(
+                    markerX = markerX,
+                    markerY = markerY,
+                    onMarkerChange = { x, y ->
+                        markerX = x
+                        markerY = y
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
 
         Column(
             modifier = Modifier
@@ -131,25 +170,130 @@ fun CameraScreen(
                 previewMode = uiState.previewMode,
                 onClick = onToggleMode,
             )
-            if (uiState.previewMode == PreviewMode.COLOR_NEGATIVE_CORRECTED) {
-                Button(onClick = { }) {
-                    Text(text = "片基采样")
+        }
+
+        if (uiState.previewMode == PreviewMode.COLOR_NEGATIVE_CORRECTED) {
+            OrangeMaskControls(
+                samplingState = uiState.orangeMaskSamplingState,
+                sample = uiState.orangeMaskSample,
+                onStartSampling = onStartOrangeMaskSampling,
+                onConfirmSample = {
+                    cameraGlView?.sampleOrangeMask(
+                        normalizedX = markerX,
+                        normalizedY = markerY,
+                    ) { result ->
+                        result
+                            .onSuccess(onOrangeMaskSampled)
+                            .onFailure { throwable ->
+                                onCaptureFailed(throwable.message ?: "片基采样失败。")
+                            }
+                    } ?: onCaptureFailed("Preview is not ready for sampling.")
+                },
+                onResetSample = onResetOrangeMaskSample,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(16.dp),
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(bottom = 24.dp),
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            if (uiState.previewMode != PreviewMode.NORMAL) {
+                Column(
+                    horizontalAlignment = Alignment.Start,
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    if (showToneControls || showRgbControls) {
+                        ProcessingControls(
+                            previewMode = uiState.previewMode,
+                            processingParams = uiState.processingParams,
+                            showTone = showToneControls,
+                            showRgb = showRgbControls,
+                            onBrightnessChange = onBrightnessChange,
+                            onContrastChange = onContrastChange,
+                            onGammaChange = onGammaChange,
+                            onRedGainChange = onRedGainChange,
+                            onGreenGainChange = onGreenGainChange,
+                            onBlueGainChange = onBlueGainChange,
+                            onResetTone = onResetTone,
+                            onResetRgb = onResetRgb,
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { showToneControls = !showToneControls }) {
+                            Text(text = "Tone")
+                        }
+                        if (uiState.previewMode != PreviewMode.BW_NEGATIVE) {
+                            Button(onClick = { showRgbControls = !showRgbControls }) {
+                                Text(text = "RGB")
+                            }
+                        }
+                    }
                 }
             }
-            if (uiState.previewMode != PreviewMode.NORMAL) {
-                ProcessingControls(
-                    previewMode = uiState.previewMode,
-                    processingParams = uiState.processingParams,
-                    onBrightnessChange = onBrightnessChange,
-                    onContrastChange = onContrastChange,
-                    onGammaChange = onGammaChange,
-                    onRedGainChange = onRedGainChange,
-                    onGreenGainChange = onGreenGainChange,
-                    onBlueGainChange = onBlueGainChange,
-                    onResetTone = onResetTone,
-                    onResetRgb = onResetRgb,
-                )
-            }
+
+            CaptureButton(
+                enabled = !uiState.isCapturing,
+                onClick = {
+                    val captureMode = uiState.previewMode
+                    val captureParams = uiState.processingParams
+                    val captureOrangeMaskSample = uiState.orangeMaskSample
+                    onCaptureStarted()
+                    imageCaptureController.captureToTempFile(
+                        imageCapture = cameraXController.getImageCapture(),
+                        onSuccess = { rawFile ->
+                            coroutineScope.launch {
+                                var fileToSave: java.io.File? = null
+                                try {
+                                    fileToSave = withContext(Dispatchers.Default) {
+                                        negativeBitmapProcessor.createProcessedJpeg(
+                                            sourceFile = rawFile,
+                                            previewMode = captureMode,
+                                            processingParams = captureParams,
+                                            orangeMaskSample = captureOrangeMaskSample,
+                                        )
+                                    }
+                                    val outputFile = fileToSave ?: error("No JPEG output file was created.")
+                                    withContext(Dispatchers.IO) {
+                                        mediaStoreImageSaver.saveJpeg(
+                                            sourceFile = outputFile,
+                                            previewMode = captureMode,
+                                        )
+                                    }
+                                    rawFile.delete()
+                                    onCaptureSucceeded()
+                                } catch (oom: OutOfMemoryError) {
+                                    rawFile.delete()
+                                    fileToSave?.let { processedFile ->
+                                        if (processedFile != rawFile) {
+                                            processedFile.delete()
+                                        }
+                                    }
+                                    onCaptureFailed("Not enough memory to process image.")
+                                } catch (throwable: Throwable) {
+                                    rawFile.delete()
+                                    fileToSave?.let { processedFile ->
+                                        if (processedFile != rawFile) {
+                                            processedFile.delete()
+                                        }
+                                    }
+                                    onCaptureFailed(throwable.message ?: "Image processing failed.")
+                                }
+                            }
+                        },
+                        onError = { throwable ->
+                            onCaptureFailed(throwable.message ?: "Capture failed.")
+                        },
+                    )
+                },
+            )
         }
 
         uiState.lastError?.let { message ->
@@ -158,71 +302,13 @@ fun CameraScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .windowInsetsPadding(WindowInsets.navigationBars)
-                    .padding(bottom = 96.dp, start = 24.dp, end = 24.dp),
+                    .padding(bottom = 108.dp, start = 24.dp, end = 24.dp),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 color = Color.White,
                 textAlign = TextAlign.Center,
             )
         }
-
-        CaptureButton(
-            enabled = !uiState.isCapturing,
-            onClick = {
-                val captureMode = uiState.previewMode
-                val captureParams = uiState.processingParams
-                onCaptureStarted()
-                imageCaptureController.captureToTempFile(
-                    imageCapture = cameraXController.getImageCapture(),
-                    onSuccess = { rawFile ->
-                        coroutineScope.launch {
-                            var fileToSave: java.io.File? = null
-                            try {
-                                fileToSave = withContext(Dispatchers.Default) {
-                                    negativeBitmapProcessor.createProcessedJpeg(
-                                        sourceFile = rawFile,
-                                        previewMode = captureMode,
-                                        processingParams = captureParams,
-                                    )
-                                }
-                                val outputFile = fileToSave ?: error("No JPEG output file was created.")
-                                withContext(Dispatchers.IO) {
-                                    mediaStoreImageSaver.saveJpeg(
-                                        sourceFile = outputFile,
-                                        previewMode = captureMode,
-                                    )
-                                }
-                                rawFile.delete()
-                                onCaptureSucceeded()
-                            } catch (oom: OutOfMemoryError) {
-                                rawFile.delete()
-                                fileToSave?.let { processedFile ->
-                                    if (processedFile != rawFile) {
-                                        processedFile.delete()
-                                    }
-                                }
-                                onCaptureFailed("Not enough memory to process image.")
-                            } catch (throwable: Throwable) {
-                                rawFile.delete()
-                                fileToSave?.let { processedFile ->
-                                    if (processedFile != rawFile) {
-                                        processedFile.delete()
-                                    }
-                                }
-                                onCaptureFailed(throwable.message ?: "Image processing failed.")
-                            }
-                        }
-                    },
-                    onError = { throwable ->
-                        onCaptureFailed(throwable.message ?: "Capture failed.")
-                    },
-                )
-            },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(bottom = 24.dp),
-        )
     }
 }
 
@@ -230,6 +316,8 @@ fun CameraScreen(
 private fun ProcessingControls(
     previewMode: PreviewMode,
     processingParams: ProcessingParams,
+    showTone: Boolean,
+    showRgb: Boolean,
     onBrightnessChange: (Float) -> Unit,
     onContrastChange: (Float) -> Unit,
     onGammaChange: (Float) -> Unit,
@@ -249,32 +337,34 @@ private fun ProcessingControls(
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            ParameterSlider(
-                label = "Brightness",
-                value = processingParams.brightness,
-                valueRange = -0.5f..0.5f,
-                onValueChange = onBrightnessChange,
-            )
-            ParameterSlider(
-                label = "Contrast",
-                value = processingParams.contrast,
-                valueRange = 0.2f..3f,
-                onValueChange = onContrastChange,
-            )
-            ParameterSlider(
-                label = "Gamma",
-                value = processingParams.gamma,
-                valueRange = 0.1f..3f,
-                onValueChange = onGammaChange,
-            )
-            Button(
-                onClick = onResetTone,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(text = "Reset")
+            if (showTone) {
+                ParameterSlider(
+                    label = "Brightness",
+                    value = processingParams.brightness,
+                    valueRange = -0.5f..0.5f,
+                    onValueChange = onBrightnessChange,
+                )
+                ParameterSlider(
+                    label = "Contrast",
+                    value = processingParams.contrast,
+                    valueRange = 0.2f..3f,
+                    onValueChange = onContrastChange,
+                )
+                ParameterSlider(
+                    label = "Gamma",
+                    value = processingParams.gamma,
+                    valueRange = 0.1f..3f,
+                    onValueChange = onGammaChange,
+                )
+                Button(
+                    onClick = onResetTone,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(text = "Reset")
+                }
             }
 
-            if (previewMode != PreviewMode.BW_NEGATIVE) {
+            if (showRgb && previewMode != PreviewMode.BW_NEGATIVE) {
                 ParameterSlider(
                     label = "Red",
                     value = processingParams.redGain,
@@ -301,6 +391,132 @@ private fun ProcessingControls(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun OrangeMaskControls(
+    samplingState: OrangeMaskSamplingState,
+    sample: OrangeMaskSample?,
+    onStartSampling: () -> Unit,
+    onConfirmSample: () -> Unit,
+    onResetSample: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Button(onClick = onStartSampling) {
+            Text(text = if (sample == null) "片基采样" else "重新采样")
+        }
+        if (samplingState == OrangeMaskSamplingState.ARMING) {
+            Button(onClick = onConfirmSample) {
+                Text(text = "确定采样")
+            }
+        }
+        if (sample != null) {
+            Surface(
+                shape = MaterialTheme.shapes.small,
+                color = Color.Black.copy(alpha = 0.58f),
+                contentColor = Color.White,
+            ) {
+                Column(
+                    modifier = Modifier.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(44.dp)
+                            .height(22.dp)
+                            .background(
+                                Color(
+                                    red = sample.red.coerceIn(0f, 1f),
+                                    green = sample.green.coerceIn(0f, 1f),
+                                    blue = sample.blue.coerceIn(0f, 1f),
+                                ),
+                            ),
+                    )
+                    Text(
+                        text = "R ${(sample.red * 255f).toInt()}  G ${(sample.green * 255f).toInt()}  B ${(sample.blue * 255f).toInt()}",
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                    Button(onClick = onResetSample) {
+                        Text(text = "重置片基")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OrangeMaskMarkerOverlay(
+    markerX: Float,
+    markerY: Float,
+    onMarkerChange: (Float, Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var size by remember { mutableStateOf(IntSize.Zero) }
+    val updateMarker = { offset: Offset ->
+        if (size.width > 0 && size.height > 0) {
+            onMarkerChange(
+                (offset.x / size.width).coerceIn(0f, 1f),
+                (offset.y / size.height).coerceIn(0f, 1f),
+            )
+        }
+    }
+
+    Canvas(
+        modifier = modifier
+            .onSizeChanged { size = it }
+            .pointerInput(Unit) {
+                detectTapGestures { offset ->
+                    updateMarker(offset)
+                }
+            }
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        updateMarker(offset)
+                    },
+                    onDrag = { change, _ ->
+                        updateMarker(change.position)
+                    },
+                )
+            },
+    ) {
+        val center = Offset(markerX * this.size.width, markerY * this.size.height)
+        val arm = 22.dp.toPx()
+        val gap = 5.dp.toPx()
+        drawLine(
+            color = Color.White,
+            start = Offset(center.x - arm, center.y),
+            end = Offset(center.x - gap, center.y),
+            strokeWidth = 2.dp.toPx(),
+            cap = StrokeCap.Round,
+        )
+        drawLine(
+            color = Color.White,
+            start = Offset(center.x + gap, center.y),
+            end = Offset(center.x + arm, center.y),
+            strokeWidth = 2.dp.toPx(),
+            cap = StrokeCap.Round,
+        )
+        drawLine(
+            color = Color.White,
+            start = Offset(center.x, center.y - arm),
+            end = Offset(center.x, center.y - gap),
+            strokeWidth = 2.dp.toPx(),
+            cap = StrokeCap.Round,
+        )
+        drawLine(
+            color = Color.White,
+            start = Offset(center.x, center.y + gap),
+            end = Offset(center.x, center.y + arm),
+            strokeWidth = 2.dp.toPx(),
+            cap = StrokeCap.Round,
+        )
     }
 }
 

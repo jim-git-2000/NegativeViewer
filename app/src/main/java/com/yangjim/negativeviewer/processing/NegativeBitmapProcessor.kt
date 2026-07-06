@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
+import com.yangjim.negativeviewer.state.OrangeMaskSample
 import com.yangjim.negativeviewer.state.ProcessingParams
 import com.yangjim.negativeviewer.state.PreviewMode
 import java.io.File
@@ -16,6 +17,7 @@ class NegativeBitmapProcessor(
         sourceFile: File,
         previewMode: PreviewMode,
         processingParams: ProcessingParams,
+        orangeMaskSample: OrangeMaskSample?,
     ): File {
         val decodedBitmap = BitmapFactory.decodeFile(sourceFile.absolutePath)
             ?: error("Failed to decode captured JPEG.")
@@ -32,8 +34,12 @@ class NegativeBitmapProcessor(
         val outputBitmap = try {
             when (previewMode) {
                 PreviewMode.NORMAL -> orientedBitmap
-                PreviewMode.COLOR_BASIC_INVERT,
-                PreviewMode.COLOR_NEGATIVE_CORRECTED -> processColorNegativeBitmap(orientedBitmap, processingParams)
+                PreviewMode.COLOR_BASIC_INVERT -> processColorNegativeBitmap(orientedBitmap, processingParams)
+                PreviewMode.COLOR_NEGATIVE_CORRECTED -> processCorrectedColorNegativeBitmap(
+                    src = orientedBitmap,
+                    processingParams = processingParams,
+                    orangeMaskSample = orangeMaskSample,
+                )
                 PreviewMode.BW_NEGATIVE -> processBwNegativeBitmap(orientedBitmap, processingParams)
             }
         } finally {
@@ -79,6 +85,54 @@ class NegativeBitmapProcessor(
                 red = 255 - red,
                 green = 255 - green,
                 blue = 255 - blue,
+                processingParams = processingParams,
+            )
+
+            pixels[i] =
+                (alpha shl 24) or
+                    (processed.red shl 16) or
+                    (processed.green shl 8) or
+                    processed.blue
+        }
+
+        bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
+        return bitmap
+    }
+
+    private fun processCorrectedColorNegativeBitmap(
+        src: Bitmap,
+        processingParams: ProcessingParams,
+        orangeMaskSample: OrangeMaskSample?,
+    ): Bitmap {
+        if (orangeMaskSample == null) {
+            return processColorNegativeBitmap(src, processingParams)
+        }
+
+        val bitmap = src.copy(Bitmap.Config.ARGB_8888, true)
+        val width = bitmap.width
+        val height = bitmap.height
+        val pixels = IntArray(width * height)
+        val sampleRed = orangeMaskSample.red.coerceAtLeast(EPSILON)
+        val sampleGreen = orangeMaskSample.green.coerceAtLeast(EPSILON)
+        val sampleBlue = orangeMaskSample.blue.coerceAtLeast(EPSILON)
+        val scale = maxOf(sampleRed, sampleGreen, sampleBlue)
+
+        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+
+        for (i in pixels.indices) {
+            val color = pixels[i]
+            val alpha = color ushr 24 and 0xff
+            val red = color ushr 16 and 0xff
+            val green = color ushr 8 and 0xff
+            val blue = color and 0xff
+
+            val normalizedRed = ((red / 255f) / sampleRed * scale).coerceIn(0f, 1f)
+            val normalizedGreen = ((green / 255f) / sampleGreen * scale).coerceIn(0f, 1f)
+            val normalizedBlue = ((blue / 255f) / sampleBlue * scale).coerceIn(0f, 1f)
+            val processed = applyRgbGainAndTone(
+                red = ((1f - normalizedRed) * 255f).toInt(),
+                green = ((1f - normalizedGreen) * 255f).toInt(),
+                blue = ((1f - normalizedBlue) * 255f).toInt(),
                 processingParams = processingParams,
             )
 
@@ -154,5 +208,6 @@ class NegativeBitmapProcessor(
         const val TAG = "NegativeViewerProcess"
         const val JPEG_QUALITY = 95
         const val MIN_GAMMA = 0.1f
+        const val EPSILON = 0.001f
     }
 }

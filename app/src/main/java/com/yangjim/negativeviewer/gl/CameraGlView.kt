@@ -2,8 +2,11 @@ package com.yangjim.negativeviewer.gl
 
 import android.content.Context
 import android.opengl.GLSurfaceView
+import android.os.Handler
+import android.os.Looper
 import android.util.AttributeSet
 import androidx.core.content.ContextCompat
+import com.yangjim.negativeviewer.state.OrangeMaskSample
 import com.yangjim.negativeviewer.state.ProcessingParams
 import com.yangjim.negativeviewer.state.PreviewMode
 
@@ -11,6 +14,7 @@ class CameraGlView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
 ) : GLSurfaceView(context, attrs) {
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val cameraRenderer = CameraRenderer(
         requestRender = ::requestRender,
     )
@@ -58,6 +62,32 @@ class CameraGlView @JvmOverloads constructor(
     fun setProcessingParams(processingParams: ProcessingParams) {
         queueEvent {
             cameraRenderer.setProcessingParams(processingParams)
+        }
+        requestRender()
+    }
+
+    fun setOrangeMaskSample(sample: OrangeMaskSample?) {
+        queueEvent {
+            cameraRenderer.setOrangeMaskSample(sample)
+        }
+        requestRender()
+    }
+
+    fun sampleOrangeMask(
+        normalizedX: Float,
+        normalizedY: Float,
+        onResult: (Result<OrangeMaskSample>) -> Unit,
+    ) {
+        queueEvent {
+            cameraRenderer.requestOrangeMaskSample(
+                normalizedX = normalizedX,
+                normalizedY = normalizedY,
+                onResult = { result ->
+                    mainHandler.post {
+                        onResult(result)
+                    }
+                },
+            )
         }
         requestRender()
     }

@@ -23,7 +23,14 @@ class CameraViewModel : ViewModel() {
         _uiState.update { state ->
             state.copy(
                 previewMode = mode,
-                lastError = null,
+                lastError = if (
+                    mode == PreviewMode.COLOR_NEGATIVE_CORRECTED &&
+                    state.orangeMaskSample == null
+                ) {
+                    "请先采样片基；未采样时 COLOR+ 按普通反色预览。"
+                } else {
+                    null
+                },
             )
         }
     }
@@ -87,6 +94,39 @@ class CameraViewModel : ViewModel() {
                 redGain = ProcessingParams.Default.redGain,
                 greenGain = ProcessingParams.Default.greenGain,
                 blueGain = ProcessingParams.Default.blueGain,
+            )
+        }
+    }
+
+    fun startOrangeMaskSampling() {
+        _uiState.update { state ->
+            state.copy(
+                orangeMaskSamplingState = OrangeMaskSamplingState.ARMING,
+                lastError = null,
+            )
+        }
+    }
+
+    fun setOrangeMaskSample(sample: OrangeMaskSample) {
+        _uiState.update { state ->
+            state.copy(
+                orangeMaskSamplingState = OrangeMaskSamplingState.LOCKED,
+                orangeMaskSample = sample,
+                lastError = null,
+            )
+        }
+    }
+
+    fun resetOrangeMaskSample() {
+        _uiState.update { state ->
+            state.copy(
+                orangeMaskSamplingState = OrangeMaskSamplingState.IDLE,
+                orangeMaskSample = null,
+                lastError = if (state.previewMode == PreviewMode.COLOR_NEGATIVE_CORRECTED) {
+                    "请先采样片基；未采样时 COLOR+ 按普通反色预览。"
+                } else {
+                    null
+                },
             )
         }
     }
