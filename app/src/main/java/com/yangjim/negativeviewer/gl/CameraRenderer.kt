@@ -76,7 +76,34 @@ class CameraRenderer(
     fun captureProcessedFrame(onResult: (Result<Bitmap>) -> Unit) {
         try {
             updateCameraTexture()
-            onResult(Result.success(renderProcessedFrameToBitmap()))
+            onResult(Result.success(renderFrameToBitmap(forcePreviewMode = null)))
+        } catch (throwable: Throwable) {
+            onResult(Result.failure(throwable))
+        } finally {
+            GLES20.glViewport(0, 0, viewWidth, viewHeight)
+            updateQuadScale()
+            requestRender()
+        }
+    }
+
+    fun captureProcessedAndOriginalFrames(onResult: (Result<PreviewFramePair>) -> Unit) {
+        try {
+            updateCameraTexture()
+            val processed = renderFrameToBitmap(forcePreviewMode = null)
+            try {
+                val original = renderFrameToBitmap(forcePreviewMode = PreviewMode.NORMAL)
+                onResult(
+                    Result.success(
+                        PreviewFramePair(
+                            processed = processed,
+                            original = original,
+                        ),
+                    ),
+                )
+            } catch (throwable: Throwable) {
+                processed.recycle()
+                throw throwable
+            }
         } catch (throwable: Throwable) {
             onResult(Result.failure(throwable))
         } finally {
@@ -236,7 +263,7 @@ class CameraRenderer(
         }
     }
 
-    private fun renderProcessedFrameToBitmap(): Bitmap {
+    private fun renderFrameToBitmap(forcePreviewMode: PreviewMode?): Bitmap {
         if (shaderProgram == null || fullscreenQuad == null || oesTextureId == 0) {
             error("OpenGL preview is not ready.")
         }
@@ -284,8 +311,11 @@ class CameraRenderer(
             GLES20.glViewport(0, 0, targetSize.width, targetSize.height)
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
             quad.setScale(1f, 1f)
-            drawCameraFrame(forcePreviewMode = null)
-            quad.setScale(previousScaleX, previousScaleY)
+            try {
+                drawCameraFrame(forcePreviewMode = forcePreviewMode)
+            } finally {
+                quad.setScale(previousScaleX, previousScaleY)
+            }
 
             val rgba = ByteBuffer
                 .allocateDirect(targetSize.width * targetSize.height * BYTES_PER_PIXEL)
@@ -406,6 +436,11 @@ class CameraRenderer(
     private data class CaptureSize(
         val width: Int,
         val height: Int,
+    )
+
+    data class PreviewFramePair(
+        val processed: Bitmap,
+        val original: Bitmap,
     )
 
     private companion object {

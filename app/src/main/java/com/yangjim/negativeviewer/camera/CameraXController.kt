@@ -5,13 +5,11 @@ import android.util.Log
 import android.view.Display
 import androidx.camera.core.Camera
 import androidx.camera.core.AspectRatio
-import androidx.camera.core.CameraInfo
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.DisplayOrientedMeteringPointFactory
 import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.Preview
-import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
@@ -33,8 +31,6 @@ class CameraXController {
         context: Context,
         lifecycleOwner: LifecycleOwner,
         surfaceProvider: Preview.SurfaceProvider,
-        selectedCameraId: String?,
-        onAvailableLensesChanged: (List<CameraLens>) -> Unit,
         onError: (Throwable) -> Unit,
     ) {
         val appContext = context.applicationContext
@@ -47,14 +43,6 @@ class CameraXController {
                 try {
                     if (requestId == bindRequestId) {
                         val provider = cameraProviderFuture.get()
-                        val backCameraInfos = provider.availableCameraInfos.backCameraInfos()
-                        val lenses = backCameraInfos.mapIndexed { index, cameraInfo ->
-                            CameraLens(
-                                cameraId = Camera2CameraInfo.from(cameraInfo).cameraId,
-                                label = "Lens ${index + 1}",
-                            )
-                        }
-                        onAvailableLensesChanged(lenses)
                         val previewResolutionSelector = ResolutionSelector.Builder()
                             .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
                             .setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
@@ -71,13 +59,9 @@ class CameraXController {
                             .build()
 
                         provider.unbindAll()
-                        val cameraSelector = cameraSelectorFor(
-                            selectedCameraId = selectedCameraId,
-                            backCameraInfos = backCameraInfos,
-                        )
                         camera = provider.bindToLifecycle(
                             lifecycleOwner,
-                            cameraSelector,
+                            CameraSelector.DEFAULT_BACK_CAMERA,
                             preview,
                             capture,
                         )
@@ -198,41 +182,7 @@ class CameraXController {
         this is androidx.camera.core.CameraControl.OperationCanceledException ||
             message?.contains("Cancelled by another startFocusAndMetering", ignoreCase = true) == true
 
-    private fun List<CameraInfo>.backCameraInfos(): List<CameraInfo> =
-        runCatching {
-            CameraSelector.DEFAULT_BACK_CAMERA.filter(this)
-        }.getOrElse {
-            emptyList()
-        }
-
-    private fun cameraSelectorFor(
-        selectedCameraId: String?,
-        backCameraInfos: List<CameraInfo>,
-    ): CameraSelector {
-        val selectedBackCameraId = selectedCameraId?.takeIf { cameraId ->
-            backCameraInfos.any { cameraInfo ->
-                Camera2CameraInfo.from(cameraInfo).cameraId == cameraId
-            }
-        }
-        return if (selectedBackCameraId == null) {
-            CameraSelector.DEFAULT_BACK_CAMERA
-        } else {
-            CameraSelector.Builder()
-                .addCameraFilter { cameraInfos ->
-                    cameraInfos.filter { cameraInfo ->
-                        Camera2CameraInfo.from(cameraInfo).cameraId == selectedBackCameraId
-                    }
-                }
-                .build()
-        }
-    }
-
     private companion object {
         const val TAG = "NegativeViewerCamera"
     }
 }
-
-data class CameraLens(
-    val cameraId: String,
-    val label: String,
-)

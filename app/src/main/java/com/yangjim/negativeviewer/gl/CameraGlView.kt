@@ -103,4 +103,15 @@ class CameraGlView @JvmOverloads constructor(
         }
         requestRender()
     }
+
+    fun captureProcessedAndOriginalFrames(onResult: (Result<CameraRenderer.PreviewFramePair>) -> Unit) {
+        queueEvent {
+            cameraRenderer.captureProcessedAndOriginalFrames { result ->
+                mainHandler.post {
+                    onResult(result)
+                }
+            }
+        }
+        requestRender()
+    }
 }
