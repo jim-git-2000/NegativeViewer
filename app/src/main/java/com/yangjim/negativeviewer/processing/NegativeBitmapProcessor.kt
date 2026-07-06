@@ -4,37 +4,53 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
+import com.yangjim.negativeviewer.state.PreviewMode
 import java.io.File
 
 class NegativeBitmapProcessor(
     private val context: Context,
 ) {
-    fun createInvertedJpeg(sourceFile: File): File {
-        val sourceBitmap = BitmapFactory.decodeFile(sourceFile.absolutePath)
+    fun createProcessedJpeg(
+        sourceFile: File,
+        previewMode: PreviewMode,
+    ): File {
+        val decodedBitmap = BitmapFactory.decodeFile(sourceFile.absolutePath)
             ?: error("Failed to decode captured JPEG.")
 
-        val invertedBitmap = try {
-            invertBitmap(sourceBitmap)
+        val orientedBitmap = try {
+            ExifOrientationUtils.applyOrientation(sourceFile, decodedBitmap)
+        } catch (throwable: Throwable) {
+            if (!decodedBitmap.isRecycled) {
+                decodedBitmap.recycle()
+            }
+            throw throwable
+        }
+
+        val outputBitmap = try {
+            when (previewMode) {
+                PreviewMode.NORMAL -> orientedBitmap
+                PreviewMode.INVERT -> invertBitmap(orientedBitmap)
+            }
         } finally {
-            if (!sourceBitmap.isRecycled) {
-                sourceBitmap.recycle()
+            if (previewMode == PreviewMode.INVERT && !orientedBitmap.isRecycled) {
+                orientedBitmap.recycle()
             }
         }
 
-        val outputFile = File(context.cacheDir, "captures/INVERT_${sourceFile.name}")
+        val outputFile = File(context.cacheDir, "captures/${previewMode.name}_${sourceFile.name}")
         outputFile.parentFile?.mkdirs()
 
         try {
             outputFile.outputStream().use { outputStream ->
-                if (!invertedBitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, outputStream)) {
-                    error("Failed to encode inverted JPEG.")
+                if (!outputBitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, outputStream)) {
+                    error("Failed to encode processed JPEG.")
                 }
             }
-            Log.d(TAG, "Created inverted JPEG at ${outputFile.absolutePath}")
+            Log.d(TAG, "Created ${previewMode.name} JPEG at ${outputFile.absolutePath}")
             return outputFile
         } finally {
-            if (!invertedBitmap.isRecycled) {
-                invertedBitmap.recycle()
+            if (!outputBitmap.isRecycled) {
+                outputBitmap.recycle()
             }
         }
     }

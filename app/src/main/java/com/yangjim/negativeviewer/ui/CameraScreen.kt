@@ -133,10 +133,10 @@ fun CameraScreen(
                             var fileToSave: java.io.File? = null
                             try {
                                 fileToSave = withContext(Dispatchers.Default) {
-                                    when (captureMode) {
-                                        PreviewMode.NORMAL -> rawFile
-                                        PreviewMode.INVERT -> negativeBitmapProcessor.createInvertedJpeg(rawFile)
-                                    }
+                                    negativeBitmapProcessor.createProcessedJpeg(
+                                        sourceFile = rawFile,
+                                        previewMode = captureMode,
+                                    )
                                 }
                                 val outputFile = fileToSave ?: error("No JPEG output file was created.")
                                 val uri = withContext(Dispatchers.IO) {
@@ -145,9 +145,7 @@ fun CameraScreen(
                                         previewMode = captureMode,
                                     )
                                 }
-                                if (captureMode == PreviewMode.INVERT) {
-                                    rawFile.delete()
-                                }
+                                rawFile.delete()
                                 onCaptureSucceeded(uri.toString())
                             } catch (oom: OutOfMemoryError) {
                                 rawFile.delete()
