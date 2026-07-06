@@ -1,6 +1,7 @@
 package com.yangjim.negativeviewer.gl
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.opengl.GLSurfaceView
 import android.os.Handler
 import android.os.Looper
@@ -88,6 +89,17 @@ class CameraGlView @JvmOverloads constructor(
                     }
                 },
             )
+        }
+        requestRender()
+    }
+
+    fun captureProcessedFrame(onResult: (Result<Bitmap>) -> Unit) {
+        queueEvent {
+            cameraRenderer.captureProcessedFrame { result ->
+                mainHandler.post {
+                    onResult(result)
+                }
+            }
         }
         requestRender()
     }

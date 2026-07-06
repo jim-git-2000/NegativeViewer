@@ -7,12 +7,18 @@ import java.nio.FloatBuffer
 
 class FullscreenQuad {
     private val vertexBuffer: FloatBuffer = floatBufferOf(FloatArray(VERTEX_COUNT * FLOATS_PER_VERTEX))
+    var scaleX: Float = 1f
+        private set
+    var scaleY: Float = 1f
+        private set
 
     init {
         setScale(1f, 1f)
     }
 
     fun setScale(scaleX: Float, scaleY: Float) {
+        this.scaleX = scaleX
+        this.scaleY = scaleY
         val values = floatArrayOf(
             -scaleX, -scaleY, 0f, 0f,
             scaleX, -scaleY, 1f, 0f,

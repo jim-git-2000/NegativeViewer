@@ -1,5 +1,6 @@
 package com.yangjim.negativeviewer.ui
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -57,7 +58,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.yangjim.negativeviewer.camera.CameraXController
 import com.yangjim.negativeviewer.camera.ImageCaptureController
 import com.yangjim.negativeviewer.gl.CameraGlView
-import com.yangjim.negativeviewer.processing.NegativeBitmapProcessor
 import com.yangjim.negativeviewer.processing.StitchComposer
 import com.yangjim.negativeviewer.state.CameraUiState
 import com.yangjim.negativeviewer.state.OrangeMaskSample
@@ -72,6 +72,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private val LeftControlColumnWidth = 118.dp
 private val LeftControlHorizontalPadding = 16.dp
@@ -110,7 +114,6 @@ fun CameraScreen(
     val cameraXController = remember { CameraXController() }
     val imageCaptureController = remember(context) { ImageCaptureController(context) }
     val mediaStoreImageSaver = remember(context) { MediaStoreImageSaver(context) }
-    val negativeBitmapProcessor = remember(context) { NegativeBitmapProcessor(context) }
     val stitchComposer = remember(context) { StitchComposer(context) }
     val coroutineScope = rememberCoroutineScope()
     var cameraGlView by remember { mutableStateOf<CameraGlView?>(null) }
@@ -341,10 +344,8 @@ fun CameraScreen(
         CaptureButton(
             enabled = !uiState.isCapturing,
             isProcessing = uiState.isCapturing,
-            onClick = {
+            onClick = captureClick@{
                 val captureMode = uiState.previewMode
-                val captureParams = uiState.processingParams
-                val captureOrangeMaskSample = uiState.orangeMaskSample
                 val captureSaveOutputMode = if (captureMode == PreviewMode.NORMAL) {
                     SaveOutputMode.PROCESSED_ONLY
                 } else {
@@ -352,81 +353,97 @@ fun CameraScreen(
                 }
                 onCaptureStarted()
                 try {
-                    imageCaptureController.captureToTempFile(
-                        imageCapture = cameraXController.getImageCapture(),
-                        onSuccess = { rawFile ->
-                            coroutineScope.launch {
-                                var fileToSave: java.io.File? = null
-                                var processedFile: java.io.File? = null
-                                try {
-                                    val nameSuffix = when {
-                                        captureMode == PreviewMode.NORMAL -> "ORIGINAL"
-                                        captureSaveOutputMode == SaveOutputMode.ORIGINAL_AND_PROCESSED_STITCH ->
-                                            "STITCH_${captureMode.name}"
-                                        else -> captureMode.name
-                                    }
-                                    fileToSave = if (captureMode == PreviewMode.NORMAL) {
-                                        rawFile
-                                    } else {
-                                        processedFile = withContext(Dispatchers.Default) {
-                                            negativeBitmapProcessor.createProcessedJpeg(
-                                                sourceFile = rawFile,
+                    val glView = cameraGlView
+                    if (glView == null) {
+                        onCaptureFailed("Preview is not ready for capture.")
+                        return@captureClick
+                    }
+                    glView.captureProcessedFrame { result ->
+                        result
+                            .onSuccess { bitmap ->
+                                coroutineScope.launch {
+                                    var previewFile: File? = null
+                                    try {
+                                        previewFile = withContext(Dispatchers.IO) {
+                                            createPreviewCaptureJpeg(
+                                                context = context,
+                                                bitmap = bitmap,
                                                 previewMode = captureMode,
-                                                processingParams = captureParams,
-                                                orangeMaskSample = captureOrangeMaskSample,
                                             )
                                         }
                                         if (captureSaveOutputMode == SaveOutputMode.ORIGINAL_AND_PROCESSED_STITCH) {
-                                            withContext(Dispatchers.Default) {
-                                                stitchComposer.createStitchedJpeg(
-                                                    originalFile = rawFile,
-                                                    processedFile = processedFile ?: error("Processed JPEG missing."),
+                                            imageCaptureController.captureToTempFile(
+                                                imageCapture = cameraXController.getImageCapture(),
+                                                onSuccess = { rawFile ->
+                                                    coroutineScope.launch {
+                                                        var stitchedFile: File? = null
+                                                        try {
+                                                            stitchedFile = withContext(Dispatchers.Default) {
+                                                                stitchComposer.createStitchedJpeg(
+                                                                    originalFile = rawFile,
+                                                                    processedFile = previewFile
+                                                                        ?: error("Preview JPEG missing."),
+                                                                )
+                                                            }
+                                                            withContext(Dispatchers.IO) {
+                                                                mediaStoreImageSaver.saveJpeg(
+                                                                    sourceFile = stitchedFile
+                                                                        ?: error("Stitched JPEG missing."),
+                                                                    previewMode = captureMode,
+                                                                    nameSuffix = "STITCH_${captureMode.name}",
+                                                                )
+                                                            }
+                                                            rawFile.delete()
+                                                            previewFile?.delete()
+                                                            onCaptureSucceeded()
+                                                        } catch (oom: OutOfMemoryError) {
+                                                            stitchedFile?.delete()
+                                                            rawFile.delete()
+                                                            previewFile?.delete()
+                                                            onCaptureFailed("Not enough memory to process image.")
+                                                        } catch (throwable: Throwable) {
+                                                            stitchedFile?.delete()
+                                                            rawFile.delete()
+                                                            previewFile?.delete()
+                                                            onCaptureFailed(
+                                                                throwable.message ?: "Image processing failed.",
+                                                            )
+                                                        }
+                                                    }
+                                                },
+                                                onError = { throwable ->
+                                                    previewFile?.delete()
+                                                    onCaptureFailed(throwable.message ?: "Capture failed.")
+                                                },
+                                            )
+                                        } else {
+                                            withContext(Dispatchers.IO) {
+                                                mediaStoreImageSaver.saveJpeg(
+                                                    sourceFile = previewFile
+                                                        ?: error("Preview JPEG missing."),
+                                                    previewMode = captureMode,
+                                                    nameSuffix = if (captureMode == PreviewMode.NORMAL) {
+                                                        "PREVIEW_NORMAL"
+                                                    } else {
+                                                        captureMode.name
+                                                    },
                                                 )
                                             }
-                                        } else {
-                                            processedFile
+                                            onCaptureSucceeded()
                                         }
+                                    } catch (oom: OutOfMemoryError) {
+                                        previewFile?.delete()
+                                        onCaptureFailed("Not enough memory to capture preview.")
+                                    } catch (throwable: Throwable) {
+                                        previewFile?.delete()
+                                        onCaptureFailed(throwable.message ?: "Preview capture failed.")
                                     }
-                                    val outputFile = fileToSave ?: error("No JPEG output file was created.")
-                                    withContext(Dispatchers.IO) {
-                                        mediaStoreImageSaver.saveJpeg(
-                                            sourceFile = outputFile,
-                                            previewMode = captureMode,
-                                            nameSuffix = nameSuffix,
-                                        )
-                                    }
-                                    if (outputFile != rawFile) {
-                                        rawFile.delete()
-                                    }
-                                    if (processedFile != null && processedFile != outputFile) {
-                                        processedFile?.delete()
-                                    }
-                                    onCaptureSucceeded()
-                                } catch (oom: OutOfMemoryError) {
-                                    if (fileToSave != rawFile) {
-                                        fileToSave?.delete()
-                                    }
-                                    if (processedFile != fileToSave) {
-                                        processedFile?.delete()
-                                    }
-                                    rawFile.delete()
-                                    onCaptureFailed("Not enough memory to process image.")
-                                } catch (throwable: Throwable) {
-                                    if (fileToSave != rawFile) {
-                                        fileToSave?.delete()
-                                    }
-                                    if (processedFile != fileToSave) {
-                                        processedFile?.delete()
-                                    }
-                                    rawFile.delete()
-                                    onCaptureFailed(throwable.message ?: "Image processing failed.")
                                 }
                             }
-                        },
-                        onError = { throwable ->
-                            onCaptureFailed(throwable.message ?: "Capture failed.")
-                        },
-                    )
+                            .onFailure { throwable ->
+                                onCaptureFailed(throwable.message ?: "Preview capture failed.")
+                            }
+                    }
                 } catch (throwable: Throwable) {
                     onCaptureFailed(throwable.message ?: "Capture failed.")
                 }
@@ -449,6 +466,32 @@ fun CameraScreen(
                 color = Color.White,
                 textAlign = TextAlign.Center,
             )
+        }
+    }
+}
+
+private suspend fun createPreviewCaptureJpeg(
+    context: android.content.Context,
+    bitmap: Bitmap,
+    previewMode: PreviewMode,
+): File = withContext(Dispatchers.IO) {
+    val capturesDir = File(context.cacheDir, "captures").apply {
+        if (!exists() && !mkdirs()) {
+            error("Failed to create capture cache directory.")
+        }
+    }
+    val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+    val outputFile = File(capturesDir, "PREVIEW_${previewMode.name}_$timestamp.jpg")
+    try {
+        outputFile.outputStream().use { outputStream ->
+            if (!bitmap.compress(Bitmap.CompressFormat.JPEG, PREVIEW_CAPTURE_JPEG_QUALITY, outputStream)) {
+                error("Failed to encode preview JPEG.")
+            }
+        }
+        outputFile
+    } finally {
+        if (!bitmap.isRecycled) {
+            bitmap.recycle()
         }
     }
 }
@@ -797,3 +840,4 @@ private fun ParameterSlider(
 }
 
 private const val PREVIEW_ASPECT_RATIO = 3f / 4f
+private const val PREVIEW_CAPTURE_JPEG_QUALITY = 95

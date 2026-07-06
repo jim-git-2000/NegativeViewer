@@ -10,6 +10,9 @@ import androidx.camera.core.DisplayOrientedMeteringPointFactory
 import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.Preview
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
@@ -40,8 +43,12 @@ class CameraXController {
                 try {
                     if (requestId == bindRequestId) {
                         val provider = cameraProviderFuture.get()
+                        val previewResolutionSelector = ResolutionSelector.Builder()
+                            .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                            .setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
+                            .build()
                         val preview = Preview.Builder()
-                            .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+                            .setResolutionSelector(previewResolutionSelector)
                             .build()
                             .also {
                                 it.setSurfaceProvider(surfaceProvider)

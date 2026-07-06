@@ -1,5 +1,6 @@
 package com.yangjim.negativeviewer.gl
 
+import android.graphics.Bitmap
 import android.graphics.SurfaceTexture
 import android.opengl.GLES11Ext
 import android.opengl.GLES20
@@ -9,6 +10,7 @@ import com.yangjim.negativeviewer.state.OrangeMaskSample
 import com.yangjim.negativeviewer.state.ProcessingParams
 import com.yangjim.negativeviewer.state.PreviewMode
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 import kotlin.math.abs
@@ -71,6 +73,19 @@ class CameraRenderer(
         requestRender()
     }
 
+    fun captureProcessedFrame(onResult: (Result<Bitmap>) -> Unit) {
+        try {
+            updateCameraTexture()
+            onResult(Result.success(renderProcessedFrameToBitmap()))
+        } catch (throwable: Throwable) {
+            onResult(Result.failure(throwable))
+        } finally {
+            GLES20.glViewport(0, 0, viewWidth, viewHeight)
+            updateQuadScale()
+            requestRender()
+        }
+    }
+
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         GLES20.glClearColor(0.02f, 0.02f, 0.02f, 1f)
         oesTextureId = createExternalTexture()
@@ -98,14 +113,7 @@ class CameraRenderer(
     override fun onDrawFrame(gl: GL10?) {
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
 
-        surfaceTexture?.let { texture ->
-            try {
-                texture.updateTexImage()
-                texture.getTransformMatrix(textureMatrix)
-            } catch (throwable: Throwable) {
-                Log.w(TAG, "Failed to update camera texture", throwable)
-            }
-        }
+        updateCameraTexture()
 
         val sampleRequest = pendingSampleRequest
         if (sampleRequest != null) {
@@ -217,6 +225,137 @@ class CameraRenderer(
         }
     }
 
+    private fun updateCameraTexture() {
+        surfaceTexture?.let { texture ->
+            try {
+                texture.updateTexImage()
+                texture.getTransformMatrix(textureMatrix)
+            } catch (throwable: Throwable) {
+                Log.w(TAG, "Failed to update camera texture", throwable)
+            }
+        }
+    }
+
+    private fun renderProcessedFrameToBitmap(): Bitmap {
+        if (shaderProgram == null || fullscreenQuad == null || oesTextureId == 0) {
+            error("OpenGL preview is not ready.")
+        }
+
+        val targetSize = captureTargetSize()
+        val framebufferIds = IntArray(1)
+        val textureIds = IntArray(1)
+
+        GLES20.glGenFramebuffers(1, framebufferIds, 0)
+        GLES20.glGenTextures(1, textureIds, 0)
+
+        try {
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureIds[0])
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
+            GLES20.glTexImage2D(
+                GLES20.GL_TEXTURE_2D,
+                0,
+                GLES20.GL_RGBA,
+                targetSize.width,
+                targetSize.height,
+                0,
+                GLES20.GL_RGBA,
+                GLES20.GL_UNSIGNED_BYTE,
+                null,
+            )
+
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, framebufferIds[0])
+            GLES20.glFramebufferTexture2D(
+                GLES20.GL_FRAMEBUFFER,
+                GLES20.GL_COLOR_ATTACHMENT0,
+                GLES20.GL_TEXTURE_2D,
+                textureIds[0],
+                0,
+            )
+            if (GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER) != GLES20.GL_FRAMEBUFFER_COMPLETE) {
+                error("OpenGL preview capture framebuffer is incomplete.")
+            }
+
+            val quad = fullscreenQuad ?: error("OpenGL preview is not ready.")
+            val previousScaleX = quad.scaleX
+            val previousScaleY = quad.scaleY
+            GLES20.glViewport(0, 0, targetSize.width, targetSize.height)
+            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+            quad.setScale(1f, 1f)
+            drawCameraFrame(forcePreviewMode = null)
+            quad.setScale(previousScaleX, previousScaleY)
+
+            val rgba = ByteBuffer
+                .allocateDirect(targetSize.width * targetSize.height * BYTES_PER_PIXEL)
+                .order(ByteOrder.nativeOrder())
+            GLES20.glReadPixels(
+                0,
+                0,
+                targetSize.width,
+                targetSize.height,
+                GLES20.GL_RGBA,
+                GLES20.GL_UNSIGNED_BYTE,
+                rgba,
+            )
+            return rgbaToBitmap(rgba, targetSize.width, targetSize.height)
+        } finally {
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0)
+            GLES20.glDeleteFramebuffers(1, framebufferIds, 0)
+            GLES20.glDeleteTextures(1, textureIds, 0)
+        }
+    }
+
+    private fun captureTargetSize(): CaptureSize {
+        val sourceWidth = if (bufferWidth > 0) bufferWidth else viewWidth
+        val sourceHeight = if (bufferHeight > 0) bufferHeight else viewHeight
+        if (sourceWidth <= 0 || sourceHeight <= 0) {
+            error("Preview is not ready for capture.")
+        }
+
+        val viewAspect = if (viewWidth > 0 && viewHeight > 0) {
+            viewWidth.toFloat() / viewHeight.toFloat()
+        } else {
+            sourceWidth.toFloat() / sourceHeight.toFloat()
+        }
+        val rawAspect = sourceWidth.toFloat() / sourceHeight.toFloat()
+        val rotatedAspect = sourceHeight.toFloat() / sourceWidth.toFloat()
+        val rotated = abs(rotatedAspect - viewAspect) < abs(rawAspect - viewAspect)
+        val width = if (rotated) sourceHeight else sourceWidth
+        val height = if (rotated) sourceWidth else sourceHeight
+        return clampToMaxTextureSize(width, height)
+    }
+
+    private fun clampToMaxTextureSize(width: Int, height: Int): CaptureSize {
+        val maxTextureSize = IntArray(1)
+        GLES20.glGetIntegerv(GLES20.GL_MAX_TEXTURE_SIZE, maxTextureSize, 0)
+        val maxSize = maxTextureSize[0].takeIf { it > 0 } ?: return CaptureSize(width, height)
+        val scale = minOf(1f, maxSize.toFloat() / maxOf(width, height).toFloat())
+        return CaptureSize(
+            width = (width * scale).roundToInt().coerceAtLeast(1),
+            height = (height * scale).roundToInt().coerceAtLeast(1),
+        )
+    }
+
+    private fun rgbaToBitmap(buffer: ByteBuffer, width: Int, height: Int): Bitmap {
+        val pixels = IntArray(width * height)
+        buffer.position(0)
+        for (y in 0 until height) {
+            val targetY = height - 1 - y
+            for (x in 0 until width) {
+                val red = buffer.get().toInt() and 0xff
+                val green = buffer.get().toInt() and 0xff
+                val blue = buffer.get().toInt() and 0xff
+                val alpha = buffer.get().toInt() and 0xff
+                pixels[targetY * width + x] =
+                    (alpha shl 24) or (red shl 16) or (green shl 8) or blue
+            }
+        }
+        return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
+    }
+
     private fun readOrangeMaskSample(request: PendingSampleRequest): OrangeMaskSample {
         if (viewWidth <= 0 || viewHeight <= 0) {
             error("Preview is not ready for sampling.")
@@ -262,6 +401,11 @@ class CameraRenderer(
         val normalizedX: Float,
         val normalizedY: Float,
         val onResult: (Result<OrangeMaskSample>) -> Unit,
+    )
+
+    private data class CaptureSize(
+        val width: Int,
+        val height: Int,
     )
 
     private companion object {
