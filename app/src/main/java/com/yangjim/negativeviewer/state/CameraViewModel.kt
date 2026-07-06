@@ -29,11 +29,66 @@ class CameraViewModel : ViewModel() {
     }
 
     fun togglePreviewMode() {
-        val nextMode = when (_uiState.value.previewMode) {
-            PreviewMode.NORMAL -> PreviewMode.INVERT
-            PreviewMode.INVERT -> PreviewMode.NORMAL
-        }
+        val modes = PreviewMode.entries
+        val currentIndex = modes.indexOf(_uiState.value.previewMode)
+        val nextMode = modes[(currentIndex + 1).mod(modes.size)]
         setPreviewMode(nextMode)
+    }
+
+    fun setBrightness(value: Float) {
+        updateProcessingParams {
+            copy(brightness = value)
+        }
+    }
+
+    fun setContrast(value: Float) {
+        updateProcessingParams {
+            copy(contrast = value)
+        }
+    }
+
+    fun setGamma(value: Float) {
+        updateProcessingParams {
+            copy(gamma = value.coerceAtLeast(MIN_GAMMA))
+        }
+    }
+
+    fun setRedGain(value: Float) {
+        updateProcessingParams {
+            copy(redGain = value)
+        }
+    }
+
+    fun setGreenGain(value: Float) {
+        updateProcessingParams {
+            copy(greenGain = value)
+        }
+    }
+
+    fun setBlueGain(value: Float) {
+        updateProcessingParams {
+            copy(blueGain = value)
+        }
+    }
+
+    fun resetTone() {
+        updateProcessingParams {
+            copy(
+                brightness = ProcessingParams.Default.brightness,
+                contrast = ProcessingParams.Default.contrast,
+                gamma = ProcessingParams.Default.gamma,
+            )
+        }
+    }
+
+    fun resetRgbGain() {
+        updateProcessingParams {
+            copy(
+                redGain = ProcessingParams.Default.redGain,
+                greenGain = ProcessingParams.Default.greenGain,
+                blueGain = ProcessingParams.Default.blueGain,
+            )
+        }
     }
 
     fun onCaptureStarted() {
@@ -69,5 +124,18 @@ class CameraViewModel : ViewModel() {
                 lastError = message,
             )
         }
+    }
+
+    private fun updateProcessingParams(update: ProcessingParams.() -> ProcessingParams) {
+        _uiState.update { state ->
+            state.copy(
+                processingParams = state.processingParams.update(),
+                lastError = null,
+            )
+        }
+    }
+
+    private companion object {
+        const val MIN_GAMMA = 0.1f
     }
 }

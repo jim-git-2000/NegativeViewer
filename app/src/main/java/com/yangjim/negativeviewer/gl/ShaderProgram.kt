@@ -23,6 +23,20 @@ class ShaderProgram(
         }
     }
 
+    fun setFloat(name: String, value: Float) {
+        val location = GLES20.glGetUniformLocation(programId, name)
+        if (location >= 0) {
+            GLES20.glUniform1f(location, value)
+        }
+    }
+
+    fun setFloat3(name: String, x: Float, y: Float, z: Float) {
+        val location = GLES20.glGetUniformLocation(programId, name)
+        if (location >= 0) {
+            GLES20.glUniform3f(location, x, y, z)
+        }
+    }
+
     fun setMat4(name: String, value: FloatArray) {
         val location = GLES20.glGetUniformLocation(programId, name)
         if (location >= 0) {

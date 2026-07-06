@@ -4,6 +4,7 @@ import android.content.Context
 import android.opengl.GLSurfaceView
 import android.util.AttributeSet
 import androidx.core.content.ContextCompat
+import com.yangjim.negativeviewer.state.ProcessingParams
 import com.yangjim.negativeviewer.state.PreviewMode
 
 class CameraGlView @JvmOverloads constructor(
@@ -50,6 +51,13 @@ class CameraGlView @JvmOverloads constructor(
     fun setPreviewMode(previewMode: PreviewMode) {
         queueEvent {
             cameraRenderer.setPreviewMode(previewMode)
+        }
+        requestRender()
+    }
+
+    fun setProcessingParams(processingParams: ProcessingParams) {
+        queueEvent {
+            cameraRenderer.setProcessingParams(processingParams)
         }
         requestRender()
     }

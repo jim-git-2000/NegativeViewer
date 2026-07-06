@@ -5,6 +5,7 @@ import android.opengl.GLES11Ext
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
 import android.util.Log
+import com.yangjim.negativeviewer.state.ProcessingParams
 import com.yangjim.negativeviewer.state.PreviewMode
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
@@ -23,7 +24,8 @@ class CameraRenderer(
     private var viewHeight = 0
     private var bufferWidth = 0
     private var bufferHeight = 0
-    private var invertEnabled = true
+    private var previewMode = PreviewMode.COLOR_BASIC_INVERT
+    private var processingParams = ProcessingParams.Default
 
     fun setCameraSurfaceProvider(provider: CameraSurfaceProvider) {
         cameraSurfaceProvider = provider
@@ -37,7 +39,12 @@ class CameraRenderer(
     }
 
     fun setPreviewMode(previewMode: PreviewMode) {
-        invertEnabled = previewMode == PreviewMode.INVERT
+        this.previewMode = previewMode
+        requestRender()
+    }
+
+    fun setProcessingParams(processingParams: ProcessingParams) {
+        this.processingParams = processingParams
         requestRender()
     }
 
@@ -79,7 +86,16 @@ class CameraRenderer(
 
         shaderProgram?.use {
             setInt("uCameraTexture", 0)
-            setInt("uInvertEnabled", if (invertEnabled) 1 else 0)
+            setInt("uPreviewMode", previewMode.ordinal)
+            setFloat("uBrightness", processingParams.brightness)
+            setFloat("uContrast", processingParams.contrast)
+            setFloat("uGamma", processingParams.gamma.coerceAtLeast(MIN_GAMMA))
+            setFloat3(
+                "uRgbGain",
+                processingParams.redGain,
+                processingParams.greenGain,
+                processingParams.blueGain,
+            )
             setMat4("uTexMatrix", textureMatrix)
             GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
             GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, oesTextureId)
@@ -175,18 +191,36 @@ class CameraRenderer(
             precision mediump float;
 
             uniform samplerExternalOES uCameraTexture;
-            uniform int uInvertEnabled;
+            uniform int uPreviewMode;
+            uniform float uBrightness;
+            uniform float uContrast;
+            uniform float uGamma;
+            uniform vec3 uRgbGain;
 
             varying vec2 vTexCoord;
 
+            vec3 applyTone(vec3 color) {
+                color = (color - vec3(0.5)) * uContrast + vec3(0.5);
+                color += vec3(uBrightness);
+                color = clamp(color, 0.0, 1.0);
+                return pow(color, vec3(1.0 / max(uGamma, 0.1)));
+            }
+
             void main() {
                 vec4 color = texture2D(uCameraTexture, vTexCoord);
-                if (uInvertEnabled == 1) {
-                    gl_FragColor = vec4(1.0 - color.rgb, color.a);
-                } else {
+                if (uPreviewMode == 0) {
                     gl_FragColor = color;
+                } else if (uPreviewMode == 2) {
+                    float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+                    vec3 processed = vec3(1.0 - gray);
+                    gl_FragColor = vec4(applyTone(processed), color.a);
+                } else {
+                    vec3 processed = (1.0 - color.rgb) * uRgbGain;
+                    gl_FragColor = vec4(applyTone(processed), color.a);
                 }
             }
         """
+
+        const val MIN_GAMMA = 0.1f
     }
 }
