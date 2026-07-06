@@ -1126,6 +1126,38 @@ Photo Picker URI
 
 ---
 
+# 阶段 21：实时 COLOR+ 预览采样
+
+## 目标
+
+在静态编辑页片基采样稳定后，将同样交互扩展到相机实时预览。
+
+## 任务
+
+- CameraScreen 中 COLOR+ 显示片基采样按钮。
+- 点击后在 OpenGL 预览上叠加 marker。
+- 用户定位 marker。
+- 从当前预览帧或下一次拍照帧采样。
+- sample 固化到 shader uniform。
+- 不每帧自动估计，避免颜色闪烁。
+
+## Codex Prompt
+
+```text
+将片基采样扩展到 CameraScreen 实时预览。COLOR+ 模式下点击“片基采样”显示可拖动十字 marker，用户确认后从当前相机预览帧对应区域采样 base RGB，生成 OrangeMaskSample，并将 sample 作为 shader uniform 固化使用，直到重新采样或重置。不要每帧自动估计片基，避免颜色闪烁。
+```
+
+## 验收
+
+- [ ] COLOR+ 实时预览可采样片基。
+- [ ] 采样后颜色稳定。
+- [ ] 重新采样可覆盖旧 sample。
+- [ ] 重置片基可回到纯反色。
+- [ ] 切换模式不重启 CameraX。
+- [ ] 保存结果与预览使用同一 sample。
+
+---
+
 # 阶段 18：导入已有照片
 
 ## Codex Prompt
@@ -1180,38 +1212,6 @@ Photo Picker URI
 - [ ] 识别失败不崩溃。
 - [ ] 不会错误裁切后直接覆盖原图。
 - [ ] 应用后输出长方形。
-
----
-
-# 阶段 21：实时 COLOR+ 预览采样
-
-## 目标
-
-在静态编辑页片基采样稳定后，将同样交互扩展到相机实时预览。
-
-## 任务
-
-- CameraScreen 中 COLOR+ 显示片基采样按钮。
-- 点击后在 OpenGL 预览上叠加 marker。
-- 用户定位 marker。
-- 从当前预览帧或下一次拍照帧采样。
-- sample 固化到 shader uniform。
-- 不每帧自动估计，避免颜色闪烁。
-
-## Codex Prompt
-
-```text
-将片基采样扩展到 CameraScreen 实时预览。COLOR+ 模式下点击“片基采样”显示可拖动十字 marker，用户确认后从当前相机预览帧对应区域采样 base RGB，生成 OrangeMaskSample，并将 sample 作为 shader uniform 固化使用，直到重新采样或重置。不要每帧自动估计片基，避免颜色闪烁。
-```
-
-## 验收
-
-- [ ] COLOR+ 实时预览可采样片基。
-- [ ] 采样后颜色稳定。
-- [ ] 重新采样可覆盖旧 sample。
-- [ ] 重置片基可回到纯反色。
-- [ ] 切换模式不重启 CameraX。
-- [ ] 保存结果与预览使用同一 sample。
 
 ---
 

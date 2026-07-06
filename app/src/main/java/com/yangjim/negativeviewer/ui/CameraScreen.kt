@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,8 +15,10 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
@@ -41,6 +45,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -213,14 +218,12 @@ fun CameraScreen(
         }
 
         if (uiState.previewMode != PreviewMode.NORMAL) {
-            Column(
+            Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .windowInsetsPadding(WindowInsets.navigationBars)
                     .offset(x = (-104).dp)
                     .padding(bottom = 24.dp),
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 if (showToneControls || showRgbControls) {
                     ProcessingControls(
@@ -236,9 +239,17 @@ fun CameraScreen(
                         onBlueGainChange = onBlueGainChange,
                         onResetTone = onResetTone,
                         onResetRgb = onResetRgb,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .offset(y = (-88).dp),
                     )
                 }
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+
+                Column(
+                    modifier = Modifier.align(Alignment.BottomEnd),
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     Button(onClick = { showToneControls = !showToneControls }) {
                         Text(text = "Tone")
                     }
@@ -253,6 +264,7 @@ fun CameraScreen(
 
         CaptureButton(
             enabled = !uiState.isCapturing,
+            isProcessing = uiState.isCapturing,
             onClick = {
                 val captureMode = uiState.previewMode
                 val captureParams = uiState.processingParams
@@ -379,15 +391,21 @@ private fun ProcessingControls(
     onBlueGainChange: (Float) -> Unit,
     onResetTone: () -> Unit,
     onResetRgb: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
+    val scrollState = rememberScrollState()
+
     Surface(
-        modifier = Modifier.width(224.dp),
+        modifier = modifier.width(216.dp),
         shape = MaterialTheme.shapes.small,
         color = Color.Black.copy(alpha = 0.58f),
         contentColor = Color.White,
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier
+                .heightIn(max = 280.dp)
+                .verticalScroll(scrollState)
+                .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             if (showTone) {
@@ -459,7 +477,7 @@ private fun OrangeMaskControls(
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = onStartSampling) {
@@ -477,14 +495,14 @@ private fun OrangeMaskControls(
                 color = Color.Black.copy(alpha = 0.58f),
                 contentColor = Color.White,
             ) {
-                Column(
-                    modifier = Modifier.padding(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(
                         modifier = Modifier
-                            .width(44.dp)
-                            .height(22.dp)
+                            .size(width = 30.dp, height = 18.dp)
                             .background(
                                 Color(
                                     red = sample.red.coerceIn(0f, 1f),
@@ -494,11 +512,19 @@ private fun OrangeMaskControls(
                             ),
                     )
                     Text(
-                        text = "R ${(sample.red * 255f).toInt()}  G ${(sample.green * 255f).toInt()}  B ${(sample.blue * 255f).toInt()}",
+                        text = "R ${(sample.red * 255f).toInt()} G ${(sample.green * 255f).toInt()} B ${(sample.blue * 255f).toInt()}",
                         style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
-                    Button(onClick = onResetSample) {
-                        Text(text = "重置片基")
+                    Button(
+                        onClick = onResetSample,
+                        modifier = Modifier.height(32.dp),
+                    ) {
+                        Text(
+                            text = "重置片基",
+                            maxLines = 1,
+                        )
                     }
                 }
             }
