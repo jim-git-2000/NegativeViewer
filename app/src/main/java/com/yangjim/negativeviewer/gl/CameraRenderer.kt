@@ -118,9 +118,9 @@ class CameraRenderer(
         }
 
         if (bufferAspect > viewAspect) {
-            quad.setScale(bufferAspect / viewAspect, 1f)
-        } else {
             quad.setScale(1f, viewAspect / bufferAspect)
+        } else {
+            quad.setScale(bufferAspect / viewAspect, 1f)
         }
     }
 

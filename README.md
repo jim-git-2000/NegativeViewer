@@ -56,4 +56,4 @@ Manual smoke test:
 - Color negative correction is not implemented.
 - MVP is portrait-first.
 - Rolling-shutter distortion can still appear with movement, dim light, or flickering backlights.
-- Preview and saved photo framing can still differ slightly because CameraX preview and ImageCapture use different output streams.
+- Preview is shown in a 4:3 letterboxed area to better match default ImageCapture framing.

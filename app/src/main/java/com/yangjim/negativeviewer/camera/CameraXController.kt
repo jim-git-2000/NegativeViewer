@@ -2,6 +2,7 @@ package com.yangjim.negativeviewer.camera
 
 import android.content.Context
 import android.util.Log
+import androidx.camera.core.AspectRatio
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.Preview
@@ -29,10 +30,14 @@ class CameraXController {
                 try {
                     if (requestId == bindRequestId) {
                         val provider = cameraProviderFuture.get()
-                        val preview = Preview.Builder().build().also {
-                            it.setSurfaceProvider(surfaceProvider)
-                        }
+                        val preview = Preview.Builder()
+                            .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+                            .build()
+                            .also {
+                                it.setSurfaceProvider(surfaceProvider)
+                            }
                         val capture = ImageCapture.Builder()
+                            .setTargetAspectRatio(AspectRatio.RATIO_4_3)
                             .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
                             .build()
 
