@@ -31,6 +31,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -66,11 +68,18 @@ import com.yangjim.negativeviewer.storage.MediaStoreImageSaver
 import com.yangjim.negativeviewer.ui.components.CaptureButton
 import com.yangjim.negativeviewer.ui.components.ModeToggleButton
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private val LeftControlColumnWidth = 118.dp
 private val LeftControlHorizontalPadding = 16.dp
+
+private data class FocusIndicator(
+    val normalizedX: Float,
+    val normalizedY: Float,
+    val locked: Boolean,
+)
 
 @Composable
 fun CameraScreen(
@@ -107,6 +116,17 @@ fun CameraScreen(
     var markerY by remember { mutableStateOf(0.5f) }
     var showToneControls by remember { mutableStateOf(false) }
     var showRgbControls by remember { mutableStateOf(false) }
+    var focusIndicator by remember { mutableStateOf<FocusIndicator?>(null) }
+
+    LaunchedEffect(focusIndicator) {
+        val indicator = focusIndicator
+        if (indicator != null && !indicator.locked) {
+            delay(1200)
+            if (focusIndicator == indicator) {
+                focusIndicator = null
+            }
+        }
+    }
 
     DisposableEffect(lifecycleOwner, cameraGlView) {
         val glView = cameraGlView
@@ -152,6 +172,33 @@ fun CameraScreen(
                     glView.setProcessingParams(uiState.processingParams)
                     glView.setOrangeMaskSample(uiState.orangeMaskSample)
                     glView.requestRender()
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+
+            val orangeMaskMarkerActive =
+                uiState.previewMode == PreviewMode.COLOR_NEGATIVE_CORRECTED &&
+                    uiState.orangeMaskSamplingState == OrangeMaskSamplingState.ARMING
+
+            FocusTouchOverlay(
+                enabled = !orangeMaskMarkerActive,
+                indicator = focusIndicator,
+                onFocus = { normalizedX, normalizedY, previewSize, lock ->
+                    cameraXController.focusAt(
+                        normalizedX = normalizedX,
+                        normalizedY = normalizedY,
+                        previewWidth = previewSize.width,
+                        previewHeight = previewSize.height,
+                        lock = lock,
+                        onError = { throwable ->
+                            onCaptureFailed(throwable.message ?: "Focus failed.")
+                        },
+                    )
+                    focusIndicator = FocusIndicator(
+                        normalizedX = normalizedX,
+                        normalizedY = normalizedY,
+                        locked = lock,
+                    )
                 },
                 modifier = Modifier.fillMaxSize(),
             )
@@ -217,7 +264,8 @@ fun CameraScreen(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(start = LeftControlHorizontalPadding, top = 16.dp),
+                    .padding(start = LeftControlHorizontalPadding, top = 16.dp)
+                    .width(LeftControlColumnWidth),
             )
         }
 
@@ -512,7 +560,7 @@ private fun OrangeMaskControls(
                     onStartSampling()
                 }
             },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.align(Alignment.CenterHorizontally),
         ) {
             Text(text = if (samplingActive) "重置片基" else "片基采样")
         }
@@ -525,7 +573,7 @@ private fun OrangeMaskControls(
                         onStartSampling()
                     }
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.align(Alignment.CenterHorizontally),
             ) {
                 Text(
                     text = if (samplingState == OrangeMaskSamplingState.ARMING) {
@@ -654,6 +702,68 @@ private fun OrangeMaskMarkerOverlay(
             strokeWidth = 2.dp.toPx(),
             cap = StrokeCap.Round,
         )
+    }
+}
+
+@Composable
+private fun FocusTouchOverlay(
+    enabled: Boolean,
+    indicator: FocusIndicator?,
+    onFocus: (Float, Float, IntSize, Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var size by remember { mutableStateOf(IntSize.Zero) }
+
+    Canvas(
+        modifier = modifier
+            .onSizeChanged { size = it }
+            .pointerInput(enabled) {
+                if (!enabled) return@pointerInput
+                detectTapGestures(
+                    onTap = { offset ->
+                        if (size.width > 0 && size.height > 0) {
+                            onFocus(
+                                (offset.x / size.width).coerceIn(0f, 1f),
+                                (offset.y / size.height).coerceIn(0f, 1f),
+                                size,
+                                false,
+                            )
+                        }
+                    },
+                    onLongPress = { offset ->
+                        if (size.width > 0 && size.height > 0) {
+                            onFocus(
+                                (offset.x / size.width).coerceIn(0f, 1f),
+                                (offset.y / size.height).coerceIn(0f, 1f),
+                                size,
+                                true,
+                            )
+                        }
+                    },
+                )
+            },
+    ) {
+        val current = indicator ?: return@Canvas
+        val center = Offset(
+            x = current.normalizedX * this.size.width,
+            y = current.normalizedY * this.size.height,
+        )
+        val color = if (current.locked) Color(0xFFE20612) else Color.White
+        drawCircle(
+            color = color,
+            radius = 24.dp.toPx(),
+            center = center,
+            style = Stroke(width = 2.dp.toPx()),
+        )
+        if (current.locked) {
+            drawLine(
+                color = color,
+                start = Offset(center.x - 10.dp.toPx(), center.y),
+                end = Offset(center.x + 10.dp.toPx(), center.y),
+                strokeWidth = 2.dp.toPx(),
+                cap = StrokeCap.Round,
+            )
+        }
     }
 }
 

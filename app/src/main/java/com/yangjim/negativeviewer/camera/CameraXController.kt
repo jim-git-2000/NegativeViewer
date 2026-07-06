@@ -2,16 +2,22 @@ package com.yangjim.negativeviewer.camera
 
 import android.content.Context
 import android.util.Log
+import androidx.camera.core.Camera
 import androidx.camera.core.AspectRatio
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.Preview
+import androidx.camera.core.SurfaceOrientedMeteringPointFactory
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import java.util.concurrent.TimeUnit
 
 class CameraXController {
+    private var appContext: Context? = null
     private var cameraProvider: ProcessCameraProvider? = null
+    private var camera: Camera? = null
     private var imageCapture: ImageCapture? = null
     private var bindRequestId = 0
 
@@ -22,6 +28,7 @@ class CameraXController {
         onError: (Throwable) -> Unit,
     ) {
         val appContext = context.applicationContext
+        this.appContext = appContext
         val cameraProviderFuture = ProcessCameraProvider.getInstance(appContext)
         val requestId = ++bindRequestId
 
@@ -42,7 +49,7 @@ class CameraXController {
                             .build()
 
                         provider.unbindAll()
-                        provider.bindToLifecycle(
+                        camera = provider.bindToLifecycle(
                             lifecycleOwner,
                             CameraSelector.DEFAULT_BACK_CAMERA,
                             preview,
@@ -64,6 +71,50 @@ class CameraXController {
 
     fun getImageCapture(): ImageCapture? = imageCapture
 
+    fun focusAt(
+        normalizedX: Float,
+        normalizedY: Float,
+        previewWidth: Int,
+        previewHeight: Int,
+        lock: Boolean,
+        onError: (Throwable) -> Unit,
+    ) {
+        val activeCamera = camera ?: return
+        if (previewWidth <= 0 || previewHeight <= 0) return
+
+        val meteringFactory = SurfaceOrientedMeteringPointFactory(
+            previewWidth.toFloat(),
+            previewHeight.toFloat(),
+        )
+        val meteringPoint = meteringFactory.createPoint(
+            normalizedX.coerceIn(0f, 1f) * previewWidth,
+            normalizedY.coerceIn(0f, 1f) * previewHeight,
+        )
+        val actionBuilder = FocusMeteringAction.Builder(
+            meteringPoint,
+            FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE,
+        )
+        if (lock) {
+            actionBuilder.disableAutoCancel()
+        } else {
+            actionBuilder.setAutoCancelDuration(3, TimeUnit.SECONDS)
+        }
+
+        val future = activeCamera.cameraControl.startFocusAndMetering(actionBuilder.build())
+        val executorContext = appContext ?: return
+        future.addListener(
+            {
+                try {
+                    future.get()
+                } catch (throwable: Throwable) {
+                    Log.w(TAG, "Focus metering failed", throwable)
+                    onError(throwable)
+                }
+            },
+            ContextCompat.getMainExecutor(executorContext),
+        )
+    }
+
     fun unbind() {
         bindRequestId++
         try {
@@ -73,7 +124,9 @@ class CameraXController {
             Log.w(TAG, "Failed to unbind CameraX camera use cases", throwable)
         } finally {
             cameraProvider = null
+            camera = null
             imageCapture = null
+            appContext = null
         }
     }
 
