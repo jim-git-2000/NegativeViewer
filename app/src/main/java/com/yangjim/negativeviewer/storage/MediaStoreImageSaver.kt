@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
+import com.yangjim.negativeviewer.state.PreviewMode
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -14,15 +15,14 @@ import java.util.Locale
 class MediaStoreImageSaver(
     private val context: Context,
 ) {
-    fun saveOriginalJpeg(
+    fun saveJpeg(
         sourceFile: File,
-        onSuccess: (Uri) -> Unit,
-        onError: (Throwable) -> Unit,
-    ) {
+        previewMode: PreviewMode,
+    ): Uri {
         var imageUri: Uri? = null
         try {
             val resolver = context.contentResolver
-            val values = createContentValues()
+            val values = createContentValues(previewMode)
             imageUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
                 ?: error("Failed to create MediaStore image.")
 
@@ -40,23 +40,23 @@ class MediaStoreImageSaver(
             }
 
             sourceFile.delete()
-            Log.d(TAG, "Saved original JPEG to MediaStore: $imageUri")
-            onSuccess(imageUri)
+            Log.d(TAG, "Saved ${previewMode.name} JPEG to MediaStore: $imageUri")
+            return imageUri
         } catch (throwable: Throwable) {
             imageUri?.let { uri ->
                 runCatching {
                     context.contentResolver.delete(uri, null, null)
                 }
             }
-            Log.e(TAG, "Failed to save original JPEG to MediaStore", throwable)
-            onError(throwable)
+            Log.e(TAG, "Failed to save ${previewMode.name} JPEG to MediaStore", throwable)
+            throw throwable
         }
     }
 
-    private fun createContentValues(): ContentValues {
+    private fun createContentValues(previewMode: PreviewMode): ContentValues {
         val timestamp = SimpleDateFormat(TIME_PATTERN, Locale.US).format(Date())
         return ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, "NEG_${timestamp}_NORMAL.jpg")
+            put(MediaStore.Images.Media.DISPLAY_NAME, "NEG_${timestamp}_${previewMode.name}.jpg")
             put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 put(MediaStore.Images.Media.RELATIVE_PATH, RELATIVE_PATH)

@@ -2,13 +2,14 @@
 
 A minimal Android app for viewing film negatives through the camera.
 
-This repository is currently at the early MVP stage. It contains CI build setup, camera permission flow, a basic CameraX PreviewView camera preview, ImageCapture, and MediaStore JPEG saving.
+This repository is currently at the early MVP stage. It contains CI build setup, camera permission flow, a basic CameraX PreviewView camera preview, ImageCapture, MediaStore JPEG saving, and RGB inversion for saved photos.
 
 ## Planned MVP Features
 
 - CameraX camera pipeline
 - ImageCapture photo capture
 - MediaStore JPEG saving to `Pictures/NegativeViewer/`
+- Normal / inverted photo saving
 - Real-time inverted camera preview
 - OpenGL ES shader preview
 - Normal / inverted mode
@@ -40,7 +41,8 @@ adb install -r app-debug.apk
 
 ## Known Limitations
 
-- Photo capture currently saves the original JPEG to `Pictures/NegativeViewer/`.
+- Photo capture saves `NORMAL` as the original JPEG and `INVERT` as an RGB-inverted JPEG.
+- Preview is still normal CameraX PreviewView output; real-time shader inversion is not implemented yet.
 - Camera preview is currently normal CameraX PreviewView output, not OpenGL shader output.
 - Pure RGB inversion only is planned for the first MVP.
 - Color negative correction is not implemented.

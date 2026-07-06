@@ -16,6 +16,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,10 +30,15 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.camera.view.PreviewView
 import com.yangjim.negativeviewer.camera.CameraXController
 import com.yangjim.negativeviewer.camera.ImageCaptureController
+import com.yangjim.negativeviewer.processing.NegativeBitmapProcessor
 import com.yangjim.negativeviewer.state.CameraUiState
+import com.yangjim.negativeviewer.state.PreviewMode
 import com.yangjim.negativeviewer.storage.MediaStoreImageSaver
 import com.yangjim.negativeviewer.ui.components.CaptureButton
 import com.yangjim.negativeviewer.ui.components.ModeToggleButton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun CameraScreen(
@@ -49,6 +55,8 @@ fun CameraScreen(
     val cameraXController = remember { CameraXController() }
     val imageCaptureController = remember(context) { ImageCaptureController(context) }
     val mediaStoreImageSaver = remember(context) { MediaStoreImageSaver(context) }
+    val negativeBitmapProcessor = remember(context) { NegativeBitmapProcessor(context) }
+    val coroutineScope = rememberCoroutineScope()
     var previewView by remember { mutableStateOf<PreviewView?>(null) }
 
     DisposableEffect(lifecycleOwner, previewView) {
@@ -116,20 +124,49 @@ fun CameraScreen(
         CaptureButton(
             enabled = !uiState.isCapturing,
             onClick = {
+                val captureMode = uiState.previewMode
                 onCaptureStarted()
                 imageCaptureController.captureToTempFile(
                     imageCapture = cameraXController.getImageCapture(),
-                    onSuccess = { file ->
-                        mediaStoreImageSaver.saveOriginalJpeg(
-                            sourceFile = file,
-                            onSuccess = { uri ->
+                    onSuccess = { rawFile ->
+                        coroutineScope.launch {
+                            var fileToSave: java.io.File? = null
+                            try {
+                                fileToSave = withContext(Dispatchers.Default) {
+                                    when (captureMode) {
+                                        PreviewMode.NORMAL -> rawFile
+                                        PreviewMode.INVERT -> negativeBitmapProcessor.createInvertedJpeg(rawFile)
+                                    }
+                                }
+                                val outputFile = fileToSave ?: error("No JPEG output file was created.")
+                                val uri = withContext(Dispatchers.IO) {
+                                    mediaStoreImageSaver.saveJpeg(
+                                        sourceFile = outputFile,
+                                        previewMode = captureMode,
+                                    )
+                                }
+                                if (captureMode == PreviewMode.INVERT) {
+                                    rawFile.delete()
+                                }
                                 onCaptureSucceeded(uri.toString())
-                            },
-                            onError = { throwable ->
-                                file.delete()
-                                onCaptureFailed(throwable.message ?: "Save failed.")
-                            },
-                        )
+                            } catch (oom: OutOfMemoryError) {
+                                rawFile.delete()
+                                fileToSave?.let { processedFile ->
+                                    if (processedFile != rawFile) {
+                                        processedFile.delete()
+                                    }
+                                }
+                                onCaptureFailed("Not enough memory to process image.")
+                            } catch (throwable: Throwable) {
+                                rawFile.delete()
+                                fileToSave?.let { processedFile ->
+                                    if (processedFile != rawFile) {
+                                        processedFile.delete()
+                                    }
+                                }
+                                onCaptureFailed(throwable.message ?: "Image processing failed.")
+                            }
+                        }
                     },
                     onError = { throwable ->
                         onCaptureFailed(throwable.message ?: "Capture failed.")
