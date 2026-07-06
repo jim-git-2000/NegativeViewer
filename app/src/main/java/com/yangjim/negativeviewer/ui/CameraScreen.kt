@@ -13,11 +13,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -27,9 +24,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.camera.view.PreviewView
 import com.yangjim.negativeviewer.camera.CameraXController
 import com.yangjim.negativeviewer.camera.ImageCaptureController
+import com.yangjim.negativeviewer.gl.CameraGlView
 import com.yangjim.negativeviewer.processing.NegativeBitmapProcessor
 import com.yangjim.negativeviewer.state.CameraUiState
 import com.yangjim.negativeviewer.state.PreviewMode
@@ -57,20 +54,15 @@ fun CameraScreen(
     val mediaStoreImageSaver = remember(context) { MediaStoreImageSaver(context) }
     val negativeBitmapProcessor = remember(context) { NegativeBitmapProcessor(context) }
     val coroutineScope = rememberCoroutineScope()
-    var previewView by remember { mutableStateOf<PreviewView?>(null) }
 
-    DisposableEffect(lifecycleOwner, previewView) {
-        val view = previewView
-        if (view != null) {
-            cameraXController.bindCamera(
-                context = context,
-                lifecycleOwner = lifecycleOwner,
-                previewView = view,
-                onError = { throwable ->
-                    onCameraError(throwable.message ?: "Camera preview failed.")
-                },
-            )
-        }
+    DisposableEffect(lifecycleOwner) {
+        cameraXController.bindImageCaptureOnly(
+            context = context,
+            lifecycleOwner = lifecycleOwner,
+            onError = { throwable ->
+                onCameraError(throwable.message ?: "Camera capture failed.")
+            },
+        )
 
         onDispose {
             cameraXController.unbind()
@@ -84,11 +76,10 @@ fun CameraScreen(
     ) {
         AndroidView(
             factory = { viewContext ->
-                PreviewView(viewContext).apply {
-                    implementationMode = PreviewView.ImplementationMode.COMPATIBLE
-                    scaleType = PreviewView.ScaleType.FILL_CENTER
-                    previewView = this
-                }
+                CameraGlView(viewContext)
+            },
+            update = { glView ->
+                glView.requestRender()
             },
             modifier = Modifier
                 .fillMaxSize()

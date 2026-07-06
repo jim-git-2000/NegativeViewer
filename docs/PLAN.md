@@ -1710,7 +1710,7 @@ adb install -r app-debug.apk
 - Color negative correction is not implemented.
 - MVP is portrait-first.
 - Some devices may have preview rotation/aspect-ratio issues.
-```
+
 
 ---
 

@@ -58,6 +58,44 @@ class CameraXController {
         )
     }
 
+    fun bindImageCaptureOnly(
+        context: Context,
+        lifecycleOwner: LifecycleOwner,
+        onError: (Throwable) -> Unit,
+    ) {
+        val appContext = context.applicationContext
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(appContext)
+        val requestId = ++bindRequestId
+
+        cameraProviderFuture.addListener(
+            {
+                try {
+                    if (requestId == bindRequestId) {
+                        val provider = cameraProviderFuture.get()
+                        val capture = ImageCapture.Builder()
+                            .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                            .build()
+
+                        provider.unbindAll()
+                        provider.bindToLifecycle(
+                            lifecycleOwner,
+                            CameraSelector.DEFAULT_BACK_CAMERA,
+                            capture,
+                        )
+
+                        cameraProvider = provider
+                        imageCapture = capture
+                        Log.d(TAG, "CameraX ImageCapture bound without preview")
+                    }
+                } catch (throwable: Throwable) {
+                    Log.e(TAG, "Failed to bind CameraX ImageCapture", throwable)
+                    onError(throwable)
+                }
+            },
+            ContextCompat.getMainExecutor(appContext),
+        )
+    }
+
     fun getImageCapture(): ImageCapture? = imageCapture
 
     fun unbind() {
