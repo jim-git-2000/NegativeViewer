@@ -2,7 +2,7 @@
 
 A minimal Android app for viewing film negatives through the camera.
 
-This repository is currently at the MVP skeleton stage. It only contains a Compose placeholder screen and CI build setup.
+This repository is currently at the early MVP stage. It contains CI build setup, camera permission flow, and a Compose camera screen placeholder.
 
 ## Planned MVP Features
 
@@ -38,7 +38,7 @@ adb install -r app-debug.apk
 
 ## Known Limitations
 
-- This is a skeleton app; camera functionality is not implemented yet.
+- Camera preview and capture are not implemented yet.
 - Pure RGB inversion only is planned for the first MVP.
 - Color negative correction is not implemented.
 - MVP is portrait-first.
