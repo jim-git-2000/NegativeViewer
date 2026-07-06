@@ -2,6 +2,7 @@ package com.yangjim.negativeviewer.camera
 
 import android.content.Context
 import android.util.Log
+import android.view.Display
 import androidx.camera.core.Camera
 import androidx.camera.core.AspectRatio
 import androidx.camera.core.CameraSelector
@@ -78,6 +79,7 @@ class CameraXController {
         normalizedY: Float,
         previewWidth: Int,
         previewHeight: Int,
+        display: Display,
         lock: Boolean,
         onError: (Throwable) -> Unit,
     ): Boolean {
@@ -87,7 +89,7 @@ class CameraXController {
         val requestId = ++focusRequestId
 
         val meteringFactory = DisplayOrientedMeteringPointFactory(
-            executorContext,
+            display,
             activeCamera.cameraInfo,
             previewWidth.toFloat(),
             previewHeight.toFloat(),
@@ -118,16 +120,17 @@ class CameraXController {
         val future = activeCamera.cameraControl.startFocusAndMetering(action)
         future.addListener(
             {
-                if (requestId != focusRequestId) return@addListener
-                try {
-                    future.get()
-                } catch (throwable: Throwable) {
-                    val focusThrowable = throwable.unwrapExecutionCause()
-                    if (focusThrowable.isCanceledFocusOperation()) {
-                        Log.d(TAG, "Focus metering was canceled by a newer request")
-                    } else {
-                        Log.w(TAG, "Focus metering failed", focusThrowable)
-                        onError(focusThrowable)
+                if (requestId == focusRequestId) {
+                    try {
+                        future.get()
+                    } catch (throwable: Throwable) {
+                        val focusThrowable = throwable.unwrapExecutionCause()
+                        if (focusThrowable.isCanceledFocusOperation()) {
+                            Log.d(TAG, "Focus metering was canceled by a newer request")
+                        } else {
+                            Log.w(TAG, "Focus metering failed", focusThrowable)
+                            onError(focusThrowable)
+                        }
                     }
                 }
             },

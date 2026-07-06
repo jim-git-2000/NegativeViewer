@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -104,6 +105,7 @@ fun CameraScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val localView = LocalView.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraXController = remember { CameraXController() }
     val imageCaptureController = remember(context) { ImageCaptureController(context) }
@@ -189,6 +191,7 @@ fun CameraScreen(
                         normalizedY = normalizedY,
                         previewWidth = previewSize.width,
                         previewHeight = previewSize.height,
+                        display = localView.display,
                         lock = lock,
                         onError = { throwable ->
                             onCaptureFailed(throwable.message ?: "Focus failed.")
