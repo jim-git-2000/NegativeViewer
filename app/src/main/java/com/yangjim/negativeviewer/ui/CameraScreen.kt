@@ -222,7 +222,9 @@ fun CameraScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .windowInsetsPadding(WindowInsets.navigationBars)
-                    .offset(x = (-104).dp)
+                    .offset(x = (-124).dp)
+                    .width(300.dp)
+                    .height(390.dp)
                     .padding(bottom = 24.dp),
             ) {
                 if (showToneControls || showRgbControls) {
@@ -240,14 +242,14 @@ fun CameraScreen(
                         onResetTone = onResetTone,
                         onResetRgb = onResetRgb,
                         modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .offset(y = (-88).dp),
+                            .align(Alignment.BottomStart)
+                            .offset(x = 84.dp, y = (-88).dp),
                     )
                 }
 
                 Column(
-                    modifier = Modifier.align(Alignment.BottomEnd),
-                    horizontalAlignment = Alignment.End,
+                    modifier = Modifier.align(Alignment.BottomStart),
+                    horizontalAlignment = Alignment.Start,
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Button(onClick = { showToneControls = !showToneControls }) {
@@ -477,7 +479,7 @@ private fun OrangeMaskControls(
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = onStartSampling) {
@@ -495,31 +497,40 @@ private fun OrangeMaskControls(
                 color = Color.Black.copy(alpha = 0.58f),
                 contentColor = Color.White,
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                Column(
+                    modifier = Modifier
+                        .width(132.dp)
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    horizontalAlignment = Alignment.Start,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(width = 30.dp, height = 18.dp)
-                            .background(
-                                Color(
-                                    red = sample.red.coerceIn(0f, 1f),
-                                    green = sample.green.coerceIn(0f, 1f),
-                                    blue = sample.blue.coerceIn(0f, 1f),
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(width = 30.dp, height = 18.dp)
+                                .background(
+                                    Color(
+                                        red = sample.red.coerceIn(0f, 1f),
+                                        green = sample.green.coerceIn(0f, 1f),
+                                        blue = sample.blue.coerceIn(0f, 1f),
+                                    ),
                                 ),
-                            ),
-                    )
-                    Text(
-                        text = "R ${(sample.red * 255f).toInt()} G ${(sample.green * 255f).toInt()} B ${(sample.blue * 255f).toInt()}",
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                        )
+                        Text(
+                            text = "R ${(sample.red * 255f).toInt()} G ${(sample.green * 255f).toInt()} B ${(sample.blue * 255f).toInt()}",
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                     Button(
                         onClick = onResetSample,
-                        modifier = Modifier.height(32.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(32.dp),
                     ) {
                         Text(
                             text = "重置片基",
