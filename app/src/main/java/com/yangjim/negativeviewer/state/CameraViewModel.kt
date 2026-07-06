@@ -47,11 +47,11 @@ class CameraViewModel : ViewModel() {
         }
     }
 
-    fun onCaptureSucceeded(path: String) {
+    fun onCaptureSucceeded(uri: String) {
         _uiState.update { state ->
             state.copy(
                 isCapturing = false,
-                lastMessage = "Saved raw JPEG to cache: $path",
+                lastMessage = "Saved image to gallery: $uri",
                 lastError = null,
             )
         }

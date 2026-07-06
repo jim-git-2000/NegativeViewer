@@ -30,6 +30,7 @@ import androidx.camera.view.PreviewView
 import com.yangjim.negativeviewer.camera.CameraXController
 import com.yangjim.negativeviewer.camera.ImageCaptureController
 import com.yangjim.negativeviewer.state.CameraUiState
+import com.yangjim.negativeviewer.storage.MediaStoreImageSaver
 import com.yangjim.negativeviewer.ui.components.CaptureButton
 import com.yangjim.negativeviewer.ui.components.ModeToggleButton
 
@@ -47,6 +48,7 @@ fun CameraScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraXController = remember { CameraXController() }
     val imageCaptureController = remember(context) { ImageCaptureController(context) }
+    val mediaStoreImageSaver = remember(context) { MediaStoreImageSaver(context) }
     var previewView by remember { mutableStateOf<PreviewView?>(null) }
 
     DisposableEffect(lifecycleOwner, previewView) {
@@ -118,7 +120,16 @@ fun CameraScreen(
                 imageCaptureController.captureToTempFile(
                     imageCapture = cameraXController.getImageCapture(),
                     onSuccess = { file ->
-                        onCaptureSucceeded(file.absolutePath)
+                        mediaStoreImageSaver.saveOriginalJpeg(
+                            sourceFile = file,
+                            onSuccess = { uri ->
+                                onCaptureSucceeded(uri.toString())
+                            },
+                            onError = { throwable ->
+                                file.delete()
+                                onCaptureFailed(throwable.message ?: "Save failed.")
+                            },
+                        )
                     },
                     onError = { throwable ->
                         onCaptureFailed(throwable.message ?: "Capture failed.")
