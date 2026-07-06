@@ -5,6 +5,7 @@ import android.opengl.GLES11Ext
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
 import android.util.Log
+import com.yangjim.negativeviewer.state.PreviewMode
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 import kotlin.math.abs
@@ -22,6 +23,7 @@ class CameraRenderer(
     private var viewHeight = 0
     private var bufferWidth = 0
     private var bufferHeight = 0
+    private var invertEnabled = true
 
     fun setCameraSurfaceProvider(provider: CameraSurfaceProvider) {
         cameraSurfaceProvider = provider
@@ -32,6 +34,11 @@ class CameraRenderer(
         bufferHeight = height
         updateQuadScale()
         Log.d(TAG, "Camera buffer size changed: ${width}x$height")
+    }
+
+    fun setPreviewMode(previewMode: PreviewMode) {
+        invertEnabled = previewMode == PreviewMode.INVERT
+        requestRender()
     }
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
@@ -72,6 +79,7 @@ class CameraRenderer(
 
         shaderProgram?.use {
             setInt("uCameraTexture", 0)
+            setInt("uInvertEnabled", if (invertEnabled) 1 else 0)
             setMat4("uTexMatrix", textureMatrix)
             GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
             GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, oesTextureId)
@@ -167,11 +175,17 @@ class CameraRenderer(
             precision mediump float;
 
             uniform samplerExternalOES uCameraTexture;
+            uniform int uInvertEnabled;
 
             varying vec2 vTexCoord;
 
             void main() {
-                gl_FragColor = texture2D(uCameraTexture, vTexCoord);
+                vec4 color = texture2D(uCameraTexture, vTexCoord);
+                if (uInvertEnabled == 1) {
+                    gl_FragColor = vec4(1.0 - color.rgb, color.a);
+                } else {
+                    gl_FragColor = color;
+                }
             }
         """
     }

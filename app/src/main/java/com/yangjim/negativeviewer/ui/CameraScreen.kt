@@ -85,10 +85,12 @@ fun CameraScreen(
         AndroidView(
             factory = { viewContext ->
                 CameraGlView(viewContext).also { glView ->
+                    glView.setPreviewMode(uiState.previewMode)
                     cameraGlView = glView
                 }
             },
             update = { glView ->
+                glView.setPreviewMode(uiState.previewMode)
                 glView.requestRender()
             },
             modifier = Modifier
