@@ -32,7 +32,7 @@ class CameraViewModel : ViewModel() {
                     mode == PreviewMode.COLOR_NEGATIVE_CORRECTED &&
                     state.orangeMaskSample == null
                 ) {
-                    "请先采样片基；未采样时 COLOR+ 按普通反色预览。"
+                    "请先采样片基，未采样时按照COLOR普通反色预览"
                 } else {
                     null
                 },
@@ -144,7 +144,7 @@ class CameraViewModel : ViewModel() {
                 orangeMaskSamplingState = OrangeMaskSamplingState.IDLE,
                 orangeMaskSample = null,
                 lastError = if (state.previewMode == PreviewMode.COLOR_NEGATIVE_CORRECTED) {
-                    "请先采样片基；未采样时 COLOR+ 按普通反色预览。"
+                    "请先采样片基，未采样时按照COLOR普通反色预览"
                 } else {
                     null
                 },

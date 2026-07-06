@@ -230,36 +230,37 @@ fun CameraScreen(
             )
         }
 
+        if (uiState.previewMode != PreviewMode.NORMAL && (showToneControls || showRgbControls)) {
+            ProcessingControls(
+                previewMode = uiState.previewMode,
+                processingParams = uiState.processingParams,
+                showTone = showToneControls,
+                showRgb = showRgbControls,
+                onBrightnessChange = onBrightnessChange,
+                onContrastChange = onContrastChange,
+                onGammaChange = onGammaChange,
+                onRedGainChange = onRedGainChange,
+                onGreenGainChange = onGreenGainChange,
+                onBlueGainChange = onBlueGainChange,
+                onResetTone = onResetTone,
+                onResetRgb = onResetRgb,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .offset(y = (-118).dp),
+            )
+        }
+
         if (uiState.previewMode != PreviewMode.NORMAL) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .windowInsetsPadding(WindowInsets.navigationBars)
-                    .offset(x = 10.dp)
+                    .offset(x = (-88).dp)
                     .width(280.dp)
                     .height(390.dp)
                     .padding(bottom = 24.dp),
             ) {
-                if (showToneControls || showRgbControls) {
-                    ProcessingControls(
-                        previewMode = uiState.previewMode,
-                        processingParams = uiState.processingParams,
-                        showTone = showToneControls,
-                        showRgb = showRgbControls,
-                        onBrightnessChange = onBrightnessChange,
-                        onContrastChange = onContrastChange,
-                        onGammaChange = onGammaChange,
-                        onRedGainChange = onRedGainChange,
-                        onGreenGainChange = onGreenGainChange,
-                        onBlueGainChange = onBlueGainChange,
-                        onResetTone = onResetTone,
-                        onResetRgb = onResetRgb,
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .offset(x = 76.dp, y = (-88).dp),
-                    )
-                }
-
                 Column(
                     modifier = Modifier.align(Alignment.BottomStart),
                     horizontalAlignment = Alignment.Start,
@@ -382,7 +383,7 @@ fun CameraScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .windowInsetsPadding(WindowInsets.navigationBars)
-                    .padding(bottom = 108.dp, start = 24.dp, end = 24.dp),
+                    .padding(bottom = 168.dp, start = 24.dp, end = 24.dp),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 color = Color.White,
@@ -537,7 +538,7 @@ private fun OrangeMaskSampleInfo(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = modifier.width(116.dp),
+        modifier = modifier.width(156.dp),
         shape = MaterialTheme.shapes.small,
         color = Color.Black.copy(alpha = 0.58f),
         contentColor = Color.White,
@@ -549,7 +550,7 @@ private fun OrangeMaskSampleInfo(
         ) {
             Box(
                 modifier = Modifier
-                    .size(width = 56.dp, height = 18.dp)
+                    .size(width = 72.dp, height = 18.dp)
                     .background(
                         Color(
                             red = sample.red.coerceIn(0f, 1f),
@@ -558,14 +559,25 @@ private fun OrangeMaskSampleInfo(
                         ),
                     ),
             )
-            Text(
-                text = "R ${(sample.red * 255f).toInt()} G ${(sample.green * 255f).toInt()} B ${(sample.blue * 255f).toInt()}",
-                style = MaterialTheme.typography.labelSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            RgbValue(label = "R", value = sample.red)
+            RgbValue(label = "G", value = sample.green)
+            RgbValue(label = "B", value = sample.blue)
         }
     }
+}
+
+@Composable
+private fun RgbValue(
+    label: String,
+    value: Float,
+) {
+    Text(
+        text = "$label ${(value * 255f).toInt()}",
+        modifier = Modifier.fillMaxWidth(),
+        style = MaterialTheme.typography.labelSmall,
+        textAlign = TextAlign.Center,
+        maxLines = 1,
+    )
 }
 
 @Composable

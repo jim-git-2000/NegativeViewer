@@ -65,9 +65,9 @@ fun CaptureButton(
                     val topLeft = Offset(inset, inset)
                     drawArc(
                         brush = Brush.sweepGradient(
-                            0f to Color(0xFF4C1010),
-                            0.5f to Color(0xFFB04444),
-                            1f to Color(0xFF4C1010),
+                            0f to Color(0xFFB00000),
+                            0.5f to Color(0xFFFF2A2A),
+                            1f to Color(0xFFB00000),
                         ),
                         startAngle = -90f,
                         sweepAngle = 180f,
