@@ -45,4 +45,13 @@ class CameraViewModel : ViewModel() {
             )
         }
     }
+
+    fun onCameraError(message: String) {
+        _uiState.update { state ->
+            state.copy(
+                lastMessage = null,
+                lastError = message,
+            )
+        }
+    }
 }

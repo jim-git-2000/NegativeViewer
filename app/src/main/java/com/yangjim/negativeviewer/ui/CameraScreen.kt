@@ -12,13 +12,22 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.camera.view.PreviewView
+import com.yangjim.negativeviewer.camera.CameraXController
 import com.yangjim.negativeviewer.state.CameraUiState
 import com.yangjim.negativeviewer.ui.components.CaptureButton
 import com.yangjim.negativeviewer.ui.components.ModeToggleButton
@@ -28,34 +37,49 @@ fun CameraScreen(
     uiState: CameraUiState,
     onToggleMode: () -> Unit,
     onCapture: () -> Unit,
+    onCameraError: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val cameraXController = remember { CameraXController() }
+    var previewView by remember { mutableStateOf<PreviewView?>(null) }
+
+    DisposableEffect(lifecycleOwner, previewView) {
+        val view = previewView
+        if (view != null) {
+            cameraXController.bindPreview(
+                context = context,
+                lifecycleOwner = lifecycleOwner,
+                previewView = view,
+                onError = { throwable ->
+                    onCameraError(throwable.message ?: "Camera preview failed.")
+                },
+            )
+        }
+
+        onDispose {
+            cameraXController.unbind()
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black),
     ) {
-        Box(
+        AndroidView(
+            factory = { viewContext ->
+                PreviewView(viewContext).apply {
+                    implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                    scaleType = PreviewView.ScaleType.FILL_CENTER
+                    previewView = this
+                }
+            },
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF242424),
-                            Color(0xFF111111),
-                            Color(0xFF050505),
-                        ),
-                    ),
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = "Camera preview placeholder",
-                style = MaterialTheme.typography.titleMedium,
-                color = Color(0xFFE8E8E8),
-                textAlign = TextAlign.Center,
-            )
-        }
+                .background(Color.Black),
+        )
 
         Row(
             modifier = Modifier
@@ -69,7 +93,7 @@ fun CameraScreen(
             )
         }
 
-        uiState.lastMessage?.let { message ->
+        (uiState.lastError ?: uiState.lastMessage)?.let { message ->
             Text(
                 text = message,
                 modifier = Modifier

@@ -2,12 +2,12 @@
 
 A minimal Android app for viewing film negatives through the camera.
 
-This repository is currently at the early MVP stage. It contains CI build setup, camera permission flow, and a Compose camera screen placeholder.
+This repository is currently at the early MVP stage. It contains CI build setup, camera permission flow, and a basic CameraX PreviewView camera preview.
 
 ## Planned MVP Features
 
-- Real-time inverted camera preview
 - CameraX camera pipeline
+- Real-time inverted camera preview
 - OpenGL ES shader preview
 - Normal / inverted mode
 - ImageCapture photo capture
@@ -38,7 +38,8 @@ adb install -r app-debug.apk
 
 ## Known Limitations
 
-- Camera preview and capture are not implemented yet.
+- Photo capture is not implemented yet.
+- Camera preview is currently normal CameraX PreviewView output, not OpenGL shader output.
 - Pure RGB inversion only is planned for the first MVP.
 - Color negative correction is not implemented.
 - MVP is portrait-first.
