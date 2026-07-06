@@ -30,21 +30,30 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Prepare release keystore
-        if: ${{ secrets.NV_RELEASE_KEYSTORE_BASE64 != '' }}
         shell: bash
+        env:
+          NV_RELEASE_KEYSTORE_BASE64: ${{ secrets.NV_RELEASE_KEYSTORE_BASE64 }}
         run: |
-          echo "${{ secrets.NV_RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/nv-release.keystore"
+          if [ -n "$NV_RELEASE_KEYSTORE_BASE64" ]; then
+            echo "$NV_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/nv-release.keystore"
+            echo "NV_RELEASE_KEYSTORE_PATH=$RUNNER_TEMP/nv-release.keystore" >> "$GITHUB_ENV"
+          fi
 
       - name: Make Gradle executable
         run: chmod +x ./gradlew
 
       - name: Build release APK
         env:
-          NV_RELEASE_KEYSTORE_PATH: ${{ secrets.NV_RELEASE_KEYSTORE_BASE64 != '' && format('{0}/nv-release.keystore', runner.temp) || '' }}
           NV_RELEASE_STORE_PASSWORD: ${{ secrets.NV_RELEASE_STORE_PASSWORD }}
           NV_RELEASE_KEY_ALIAS: ${{ secrets.NV_RELEASE_KEY_ALIAS }}
           NV_RELEASE_KEY_PASSWORD: ${{ secrets.NV_RELEASE_KEY_PASSWORD }}
         run: ./gradlew :app:assembleRelease --stacktrace
+
+      - name: Rename release APK
+        shell: bash
+        run: |
+          mv app/build/outputs/apk/release/app-release.apk \
+            "app/build/outputs/apk/release/NegativeViewer-Android-${GITHUB_REF_NAME}.apk"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -65,4 +74,3 @@ jobs:
             - Release 附件提供可直接下载的 APK
           files: |
             app/build/outputs/apk/release/NegativeViewer-Android-*.apk
-

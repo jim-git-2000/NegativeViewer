@@ -60,15 +60,6 @@ android {
     }
 }
 
-androidComponents {
-    onVariants(selector().withBuildType("release")) { variant ->
-        val releaseVersion = variant.versionName.orNull ?: "1.0.0"
-        variant.outputs.forEach { output ->
-            output.outputFileName.set("NegativeViewer-Android-v$releaseVersion.apk")
-        }
-    }
-}
-
 dependencies {
     val cameraXVersion = "1.4.1"
 
