@@ -37,6 +37,17 @@ jobs:
           if [ -n "$NV_RELEASE_KEYSTORE_BASE64" ]; then
             echo "$NV_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/nv-release.keystore"
             echo "NV_RELEASE_KEYSTORE_PATH=$RUNNER_TEMP/nv-release.keystore" >> "$GITHUB_ENV"
+          else
+            mkdir -p "$HOME/.android"
+            keytool -genkeypair \
+              -keystore "$HOME/.android/debug.keystore" \
+              -storepass android \
+              -keypass android \
+              -alias androiddebugkey \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
           fi
 
       - name: Make Gradle executable
