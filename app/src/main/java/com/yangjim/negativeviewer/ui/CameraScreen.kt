@@ -186,4 +186,4 @@ fun CameraScreen(
     }
 }
 
-private const val PREVIEW_ASPECT_RATIO = 4f / 3f
+private const val PREVIEW_ASPECT_RATIO = 3f / 4f
