@@ -33,14 +33,19 @@ jobs:
         shell: bash
         env:
           NV_RELEASE_KEYSTORE_BASE64: ${{ secrets.NV_RELEASE_KEYSTORE_BASE64 }}
+          NV_RELEASE_STORE_PASSWORD_SECRET: ${{ secrets.NV_RELEASE_STORE_PASSWORD }}
+          NV_RELEASE_KEY_ALIAS_SECRET: ${{ secrets.NV_RELEASE_KEY_ALIAS }}
+          NV_RELEASE_KEY_PASSWORD_SECRET: ${{ secrets.NV_RELEASE_KEY_PASSWORD }}
         run: |
           if [ -n "$NV_RELEASE_KEYSTORE_BASE64" ]; then
             echo "$NV_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/nv-release.keystore"
             echo "NV_RELEASE_KEYSTORE_PATH=$RUNNER_TEMP/nv-release.keystore" >> "$GITHUB_ENV"
+            echo "NV_RELEASE_STORE_PASSWORD=$NV_RELEASE_STORE_PASSWORD_SECRET" >> "$GITHUB_ENV"
+            echo "NV_RELEASE_KEY_ALIAS=$NV_RELEASE_KEY_ALIAS_SECRET" >> "$GITHUB_ENV"
+            echo "NV_RELEASE_KEY_PASSWORD=$NV_RELEASE_KEY_PASSWORD_SECRET" >> "$GITHUB_ENV"
           else
-            mkdir -p "$HOME/.android"
             keytool -genkeypair \
-              -keystore "$HOME/.android/debug.keystore" \
+              -keystore "$RUNNER_TEMP/nv-debug.keystore" \
               -storepass android \
               -keypass android \
               -alias androiddebugkey \
@@ -48,16 +53,16 @@ jobs:
               -keysize 2048 \
               -validity 10000 \
               -dname "CN=Android Debug,O=Android,C=US"
+            echo "NV_RELEASE_KEYSTORE_PATH=$RUNNER_TEMP/nv-debug.keystore" >> "$GITHUB_ENV"
+            echo "NV_RELEASE_STORE_PASSWORD=android" >> "$GITHUB_ENV"
+            echo "NV_RELEASE_KEY_ALIAS=androiddebugkey" >> "$GITHUB_ENV"
+            echo "NV_RELEASE_KEY_PASSWORD=android" >> "$GITHUB_ENV"
           fi
 
       - name: Make Gradle executable
         run: chmod +x ./gradlew
 
       - name: Build release APK
-        env:
-          NV_RELEASE_STORE_PASSWORD: ${{ secrets.NV_RELEASE_STORE_PASSWORD }}
-          NV_RELEASE_KEY_ALIAS: ${{ secrets.NV_RELEASE_KEY_ALIAS }}
-          NV_RELEASE_KEY_PASSWORD: ${{ secrets.NV_RELEASE_KEY_PASSWORD }}
         run: ./gradlew :app:assembleRelease --stacktrace
 
       - name: Rename release APK
