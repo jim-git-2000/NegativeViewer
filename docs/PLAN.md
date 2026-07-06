@@ -1359,6 +1359,26 @@ INVERT 模式下保存反色照片。
 - [ ] README 可指导下载 APK 和安装。
 - [ ] Actions 构建成功。
 
+## 阶段 10 执行记录
+
+代码侧已完成：
+
+- [x] 相机页面去除非必要状态文字，只保留错误提示。
+- [x] CameraX 主路径收敛为 OpenGL SurfaceProvider + ImageCapture。
+- [x] GLSurfaceView detach 时释放 SurfaceTexture/OES texture/SurfaceProvider。
+- [x] MediaStore 写入使用 OutputStream `use` 自动关闭，失败时删除 Uri。
+- [x] 拍照失败、处理失败、保存失败均恢复按钮状态。
+- [x] 临时拍照文件在成功/失败路径清理，并清理超过 24 小时的旧 cache 文件。
+- [x] README 增加安装、日志和手动测试说明。
+
+仍需外部验证：
+
+- [ ] GitHub Actions 构建成功。
+- [ ] 真机连续打开/关闭 App 5 次不崩溃。
+- [ ] 真机前后台切换 5 次不崩溃。
+- [ ] 真机连续拍照 10 张不崩溃。
+- [ ] 卸载 App 后相册中的已保存图片仍存在。
+
 ---
 
 ## 14. 手动测试计划

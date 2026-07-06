@@ -23,7 +23,6 @@ class CameraViewModel : ViewModel() {
         _uiState.update { state ->
             state.copy(
                 previewMode = mode,
-                lastMessage = "${mode.name} preview selected.",
                 lastError = null,
             )
         }
@@ -41,17 +40,15 @@ class CameraViewModel : ViewModel() {
         _uiState.update { state ->
             state.copy(
                 isCapturing = true,
-                lastMessage = "Capturing...",
                 lastError = null,
             )
         }
     }
 
-    fun onCaptureSucceeded(uri: String) {
+    fun onCaptureSucceeded() {
         _uiState.update { state ->
             state.copy(
                 isCapturing = false,
-                lastMessage = "Saved image to gallery: $uri",
                 lastError = null,
             )
         }
@@ -61,7 +58,6 @@ class CameraViewModel : ViewModel() {
         _uiState.update { state ->
             state.copy(
                 isCapturing = false,
-                lastMessage = null,
                 lastError = message,
             )
         }
@@ -70,7 +66,6 @@ class CameraViewModel : ViewModel() {
     fun onCameraError(message: String) {
         _uiState.update { state ->
             state.copy(
-                lastMessage = null,
                 lastError = message,
             )
         }

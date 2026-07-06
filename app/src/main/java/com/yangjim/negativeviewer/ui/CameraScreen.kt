@@ -45,7 +45,7 @@ fun CameraScreen(
     uiState: CameraUiState,
     onToggleMode: () -> Unit,
     onCaptureStarted: () -> Unit,
-    onCaptureSucceeded: (String) -> Unit,
+    onCaptureSucceeded: () -> Unit,
     onCaptureFailed: (String) -> Unit,
     onCameraError: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -110,7 +110,7 @@ fun CameraScreen(
             )
         }
 
-        (uiState.lastError ?: uiState.lastMessage)?.let { message ->
+        uiState.lastError?.let { message ->
             Text(
                 text = message,
                 modifier = Modifier
@@ -142,14 +142,14 @@ fun CameraScreen(
                                     )
                                 }
                                 val outputFile = fileToSave ?: error("No JPEG output file was created.")
-                                val uri = withContext(Dispatchers.IO) {
+                                withContext(Dispatchers.IO) {
                                     mediaStoreImageSaver.saveJpeg(
                                         sourceFile = outputFile,
                                         previewMode = captureMode,
                                     )
                                 }
                                 rawFile.delete()
-                                onCaptureSucceeded(uri.toString())
+                                onCaptureSucceeded()
                             } catch (oom: OutOfMemoryError) {
                                 rawFile.delete()
                                 fileToSave?.let { processedFile ->

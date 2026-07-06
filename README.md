@@ -2,21 +2,15 @@
 
 A minimal Android app for viewing film negatives through the camera.
 
-This repository is currently at the early MVP stage. It contains CI build setup, camera permission flow, CameraX preview rendered through OpenGL, real-time NORMAL/INVERT shader mode, ImageCapture, MediaStore JPEG saving, RGB inversion for saved photos, and minimum EXIF orientation correction.
-
-## Planned MVP Features
+## Features
 
 - CameraX camera pipeline
+- CameraX preview rendered through an OpenGL ES external OES texture
+- Real-time `NORMAL` / `INVERT` shader preview
 - ImageCapture photo capture
 - MediaStore JPEG saving to `Pictures/NegativeViewer/`
-- Normal / inverted photo saving
-- EXIF orientation correction for saved JPEG pixels
-- CameraX preview rendered through an OpenGL ES external OES texture
-- OpenGL ES shader preview
-- Real-time NORMAL / INVERT preview mode
-- Normal / inverted mode
-- ImageCapture photo capture
-- MediaStore JPEG saving
+- `NORMAL` original JPEG saving and `INVERT` RGB-inverted JPEG saving
+- Minimum EXIF orientation correction for saved JPEG pixels
 
 ## Non-goals for MVP
 
@@ -41,12 +35,25 @@ Debug APKs are built by GitHub Actions.
 adb install -r app-debug.apk
 ```
 
+## Test
+
+```bash
+adb install -r -g app-debug.apk
+adb logcat -c
+adb logcat | grep -E "NegativeViewer|CameraX|AndroidRuntime|GLRenderer"
+```
+
+Manual smoke test:
+
+- Launch, grant camera permission, and confirm live preview is visible.
+- Toggle `NORMAL` / `INVERT` and confirm preview switches immediately.
+- Capture in both modes and confirm images appear in `Pictures/NegativeViewer/`.
+- Background and foreground the app several times and confirm preview recovers.
+
 ## Known Limitations
 
-- Photo capture saves `NORMAL` as the original JPEG and `INVERT` as an RGB-inverted JPEG.
-- Saved JPEG pixels are rotated/flipped from the capture EXIF orientation before writing to MediaStore.
-- Preview is live CameraX frames rendered by OpenGL, with NORMAL / INVERT shader switching.
-- CameraX also provides ImageCapture for saved photos.
-- Pure RGB inversion only is planned for the first MVP.
+- Pure RGB inversion only.
 - Color negative correction is not implemented.
 - MVP is portrait-first.
+- Rolling-shutter distortion can still appear with movement, dim light, or flickering backlights.
+- Preview and saved photo framing can still differ slightly because CameraX preview and ImageCapture use different output streams.

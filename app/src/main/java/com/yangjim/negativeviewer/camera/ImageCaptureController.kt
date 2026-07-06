@@ -24,6 +24,7 @@ class ImageCaptureController(
         }
 
         val outputFile = try {
+            cleanStaleCaptureFiles()
             createOutputFile()
         } catch (throwable: Throwable) {
             onError(throwable)
@@ -63,5 +64,16 @@ class ImageCaptureController(
         const val TAG = "NegativeViewerCapture"
         const val CAPTURES_DIR = "captures"
         const val TIME_PATTERN = "yyyyMMdd_HHmmss"
+        const val STALE_CAPTURE_MAX_AGE_MS = 24L * 60L * 60L * 1000L
+    }
+
+    private fun cleanStaleCaptureFiles() {
+        val capturesDir = File(context.cacheDir, CAPTURES_DIR)
+        val now = System.currentTimeMillis()
+        capturesDir.listFiles()?.forEach { file ->
+            if (file.isFile && now - file.lastModified() > STALE_CAPTURE_MAX_AGE_MS) {
+                file.delete()
+            }
+        }
     }
 }
