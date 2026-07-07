@@ -6,6 +6,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -815,10 +817,10 @@ private fun FocusTouchOverlay(
 ) {
     var size by remember { mutableStateOf(IntSize.Zero) }
     val density = LocalDensity.current
-    val controlOffsetPx = with(density) { 44.dp.toPx() }
+    val controlOffsetPx = with(density) { 38.dp.toPx() }
     val controlEdgePaddingPx = with(density) { 18.dp.toPx() }
-    val controlHalfHeightPx = with(density) { 58.dp.toPx() }
-    val controlHitSlopPx = with(density) { 28.dp.toPx() }
+    val controlHalfHeightPx = with(density) { 50.dp.toPx() }
+    val controlHitSlopPx = with(density) { 22.dp.toPx() }
     val currentExposure by rememberUpdatedState(exposure)
     val currentOnExposureChange by rememberUpdatedState(onExposureChange)
     var exposureDragActive by remember { mutableStateOf(false) }
@@ -861,21 +863,25 @@ private fun FocusTouchOverlay(
             .onSizeChanged { size = it }
             .pointerInput(enabled, indicator) {
                 if (!enabled) return@pointerInput
-                detectDragGestures(
-                    onDragStart = { offset ->
-                        exposureDragActive = isExposureControlHit(offset)
-                        if (exposureDragActive) {
-                            exposureDragStartY = offset.y
-                            exposureDragStartValue = currentExposure
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    exposureDragActive = isExposureControlHit(down.position)
+                    if (!exposureDragActive) {
+                        return@awaitEachGesture
+                    }
+
+                    down.consume()
+                    exposureDragStartY = down.position.y
+                    exposureDragStartValue = currentExposure
+
+                    while (exposureDragActive) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id }
+                        if (change == null || !change.pressed) {
+                            exposureDragActive = false
+                            continue
                         }
-                    },
-                    onDragEnd = {
-                        exposureDragActive = false
-                    },
-                    onDragCancel = {
-                        exposureDragActive = false
-                    },
-                    onDrag = { change, _ ->
+
                         val geometry = exposureGeometry()
                         if (exposureDragActive && geometry != null) {
                             val trackHeight = (geometry.trackBottom - geometry.trackTop).coerceAtLeast(1f)
@@ -887,14 +893,14 @@ private fun FocusTouchOverlay(
                             )
                             change.consume()
                         }
-                    },
-                )
+                    }
+                }
             }
             .pointerInput(enabled) {
                 if (!enabled) return@pointerInput
                 detectTapGestures(
                     onTap = { offset ->
-                        if (size.width > 0 && size.height > 0) {
+                        if (size.width > 0 && size.height > 0 && !isExposureControlHit(offset)) {
                             onFocus(
                                 (offset.x / size.width).coerceIn(0f, 1f),
                                 (offset.y / size.height).coerceIn(0f, 1f),
@@ -904,7 +910,7 @@ private fun FocusTouchOverlay(
                         }
                     },
                     onLongPress = { offset ->
-                        if (size.width > 0 && size.height > 0) {
+                        if (size.width > 0 && size.height > 0 && !isExposureControlHit(offset)) {
                             onFocus(
                                 (offset.x / size.width).coerceIn(0f, 1f),
                                 (offset.y / size.height).coerceIn(0f, 1f),
@@ -954,54 +960,55 @@ private fun FocusTouchOverlay(
         val sunCenter = Offset(geometry.trackX, sunY)
         val sunColor = Color(0xFFFFD54F)
         val trackColor = Color.White.copy(alpha = 0.72f)
-        val radius = 6.dp.toPx()
-        val rayInner = 10.dp.toPx()
-        val rayOuter = 14.dp.toPx()
+        val radius = 4.dp.toPx()
+        val rayInner = 7.dp.toPx()
+        val rayOuter = 10.dp.toPx()
+        val sunStrokeWidth = 1.5.dp.toPx()
 
         drawLine(
             color = trackColor,
             start = Offset(geometry.trackX, geometry.trackTop),
             end = Offset(geometry.trackX, geometry.trackBottom),
-            strokeWidth = 2.dp.toPx(),
+            strokeWidth = sunStrokeWidth,
             cap = StrokeCap.Round,
         )
         drawCircle(
             color = Color.Black.copy(alpha = 0.45f),
-            radius = 19.dp.toPx(),
+            radius = 14.dp.toPx(),
             center = sunCenter,
         )
         drawCircle(
             color = sunColor,
             radius = radius,
             center = sunCenter,
-            style = Stroke(width = 2.dp.toPx()),
+            style = Stroke(width = sunStrokeWidth),
         )
         drawLine(
             color = sunColor,
             start = Offset(sunCenter.x - rayOuter, sunCenter.y),
             end = Offset(sunCenter.x - rayInner, sunCenter.y),
-            strokeWidth = 2.dp.toPx(),
+            strokeWidth = sunStrokeWidth,
             cap = StrokeCap.Round,
         )
         drawLine(
             color = sunColor,
             start = Offset(sunCenter.x + rayInner, sunCenter.y),
             end = Offset(sunCenter.x + rayOuter, sunCenter.y),
-            strokeWidth = 2.dp.toPx(),
+            strokeWidth = sunStrokeWidth,
             cap = StrokeCap.Round,
         )
         drawLine(
             color = sunColor,
             start = Offset(sunCenter.x, sunCenter.y - rayOuter),
             end = Offset(sunCenter.x, sunCenter.y - rayInner),
-            strokeWidth = 2.dp.toPx(),
+            strokeWidth = sunStrokeWidth,
             cap = StrokeCap.Round,
         )
         drawLine(
             color = sunColor,
             start = Offset(sunCenter.x, sunCenter.y + rayInner),
             end = Offset(sunCenter.x, sunCenter.y + rayOuter),
-            strokeWidth = 2.dp.toPx(),
+            strokeWidth = sunStrokeWidth,
             cap = StrokeCap.Round,
         )
     }
