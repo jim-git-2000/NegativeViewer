@@ -3,6 +3,9 @@ package com.yangjim.negativeviewer.processing
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Rect
 import android.util.Log
 import com.yangjim.negativeviewer.state.OrangeMaskSample
 import com.yangjim.negativeviewer.state.ProcessingParams
@@ -41,6 +44,11 @@ class NegativeBitmapProcessor(
                     orangeMaskSample = orangeMaskSample,
                 )
                 PreviewMode.BW_NEGATIVE -> processBwNegativeBitmap(orientedBitmap, processingParams)
+                PreviewMode.ALL_MODES -> processAllModesBitmap(
+                    src = orientedBitmap,
+                    processingParams = processingParams,
+                    orangeMaskSample = orangeMaskSample,
+                )
             }
         } finally {
             if (previewMode != PreviewMode.NORMAL && !orientedBitmap.isRecycled) {
@@ -175,6 +183,36 @@ class NegativeBitmapProcessor(
 
         bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
         return bitmap
+    }
+
+    private fun processAllModesBitmap(
+        src: Bitmap,
+        processingParams: ProcessingParams,
+        orangeMaskSample: OrangeMaskSample?,
+    ): Bitmap {
+        val normal = src.copy(Bitmap.Config.ARGB_8888, false)
+        val color = processColorNegativeBitmap(src, processingParams)
+        val bw = processBwNegativeBitmap(src, processingParams)
+        val corrected = processCorrectedColorNegativeBitmap(
+            src = src,
+            processingParams = processingParams,
+            orangeMaskSample = orangeMaskSample,
+        )
+        val output = Bitmap.createBitmap(src.width * 2, src.height * 2, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+        canvas.drawColor(Color.BLACK)
+        try {
+            canvas.drawBitmap(normal, null, Rect(0, 0, src.width, src.height), null)
+            canvas.drawBitmap(color, null, Rect(src.width, 0, src.width * 2, src.height), null)
+            canvas.drawBitmap(bw, null, Rect(0, src.height, src.width, src.height * 2), null)
+            canvas.drawBitmap(corrected, null, Rect(src.width, src.height, src.width * 2, src.height * 2), null)
+            return output
+        } finally {
+            normal.recycle()
+            color.recycle()
+            bw.recycle()
+            corrected.recycle()
+        }
     }
 
     private fun applyRgbGainAndTone(

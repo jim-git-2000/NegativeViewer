@@ -455,9 +455,11 @@ class CameraRenderer(
             uniform mat4 uTexMatrix;
 
             varying vec2 vTexCoord;
+            varying vec2 vRawTexCoord;
 
             void main() {
                 gl_Position = aPosition;
+                vRawTexCoord = aTexCoord.xy;
                 vTexCoord = (uTexMatrix * vec4(aTexCoord.xy, 0.0, 1.0)).xy;
             }
         """
@@ -475,8 +477,10 @@ class CameraRenderer(
             uniform float uGamma;
             uniform vec3 uRgbGain;
             uniform vec3 uOrangeMaskSample;
+            uniform mat4 uTexMatrix;
 
             varying vec2 vTexCoord;
+            varying vec2 vRawTexCoord;
 
             vec3 applyTone(vec3 color) {
                 color *= pow(2.0, uExposure);
@@ -493,21 +497,45 @@ class CameraRenderer(
                 return clamp(normalized, 0.0, 1.0);
             }
 
-            void main() {
-                vec4 color = texture2D(uCameraTexture, vTexCoord);
-                if (uPreviewMode == 0) {
-                    gl_FragColor = color;
-                } else if (uPreviewMode == 2) {
+            vec4 applyPreviewMode(vec4 color, int mode) {
+                if (mode == 0) {
+                    return color;
+                } else if (mode == 2) {
                     float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114));
                     vec3 processed = vec3(1.0 - gray);
-                    gl_FragColor = vec4(applyTone(processed), color.a);
-                } else if (uPreviewMode == 3 && uHasOrangeMaskSample == 1) {
+                    return vec4(applyTone(processed), color.a);
+                } else if (mode == 3 && uHasOrangeMaskSample == 1) {
                     vec3 normalized = applyOrangeMaskCorrection(color.rgb);
                     vec3 processed = (1.0 - normalized) * uRgbGain;
-                    gl_FragColor = vec4(applyTone(processed), color.a);
+                    return vec4(applyTone(processed), color.a);
                 } else {
                     vec3 processed = (1.0 - color.rgb) * uRgbGain;
-                    gl_FragColor = vec4(applyTone(processed), color.a);
+                    return vec4(applyTone(processed), color.a);
+                }
+            }
+
+            vec2 transformedTexCoord(vec2 localCoord) {
+                return (uTexMatrix * vec4(localCoord, 0.0, 1.0)).xy;
+            }
+
+            void main() {
+                if (uPreviewMode == 4) {
+                    if (abs(vRawTexCoord.x - 0.5) < 0.003 || abs(vRawTexCoord.y - 0.5) < 0.003) {
+                        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+                        return;
+                    }
+                    bool right = vRawTexCoord.x >= 0.5;
+                    bool top = vRawTexCoord.y >= 0.5;
+                    vec2 localCoord = vec2(
+                        right ? (vRawTexCoord.x - 0.5) * 2.0 : vRawTexCoord.x * 2.0,
+                        top ? (vRawTexCoord.y - 0.5) * 2.0 : vRawTexCoord.y * 2.0
+                    );
+                    vec4 color = texture2D(uCameraTexture, transformedTexCoord(localCoord));
+                    int mode = top ? (right ? 1 : 0) : (right ? 3 : 2);
+                    gl_FragColor = applyPreviewMode(color, mode);
+                } else {
+                    vec4 color = texture2D(uCameraTexture, vTexCoord);
+                    gl_FragColor = applyPreviewMode(color, uPreviewMode);
                 }
             }
         """

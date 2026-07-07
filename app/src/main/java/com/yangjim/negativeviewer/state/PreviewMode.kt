@@ -5,6 +5,7 @@ enum class PreviewMode {
     COLOR_BASIC_INVERT,
     BW_NEGATIVE,
     COLOR_NEGATIVE_CORRECTED,
+    ALL_MODES,
 }
 
 enum class SaveOutputMode {

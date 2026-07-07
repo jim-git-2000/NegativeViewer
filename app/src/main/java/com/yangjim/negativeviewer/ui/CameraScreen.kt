@@ -96,6 +96,13 @@ private data class ExposureControlGeometry(
     val trackBottom: Float,
 )
 
+private data class FocusPoint(
+    val indicatorX: Float,
+    val indicatorY: Float,
+    val cameraX: Float,
+    val cameraY: Float,
+)
+
 @Composable
 fun CameraScreen(
     uiState: CameraUiState,
@@ -133,6 +140,9 @@ fun CameraScreen(
     var showRgbControls by remember { mutableStateOf(false) }
     var focusIndicator by remember { mutableStateOf<FocusIndicator?>(null) }
     var exposureDragActive by remember { mutableStateOf(false) }
+    val allModesPreview = uiState.previewMode == PreviewMode.ALL_MODES
+    val colorPlusControlsVisible =
+        uiState.previewMode == PreviewMode.COLOR_NEGATIVE_CORRECTED || allModesPreview
 
     LaunchedEffect(focusIndicator, exposureDragActive) {
         val indicator = focusIndicator
@@ -193,17 +203,18 @@ fun CameraScreen(
             )
 
             val orangeMaskMarkerActive =
-                uiState.previewMode == PreviewMode.COLOR_NEGATIVE_CORRECTED &&
+                colorPlusControlsVisible &&
                     uiState.orangeMaskSamplingState == OrangeMaskSamplingState.ARMING
 
             FocusTouchOverlay(
                 enabled = !orangeMaskMarkerActive,
                 indicator = focusIndicator,
+                allModesPreview = allModesPreview,
                 exposure = uiState.processingParams.exposure,
-                onFocus = { normalizedX, normalizedY, previewSize, lock ->
+                onFocus = { focusPoint, previewSize, lock ->
                     val focusStarted = cameraXController.focusAt(
-                        normalizedX = normalizedX,
-                        normalizedY = normalizedY,
+                        normalizedX = focusPoint.cameraX,
+                        normalizedY = focusPoint.cameraY,
                         previewWidth = previewSize.width,
                         previewHeight = previewSize.height,
                         display = localView.display,
@@ -214,8 +225,8 @@ fun CameraScreen(
                     )
                     if (focusStarted) {
                         focusIndicator = FocusIndicator(
-                            normalizedX = normalizedX,
-                            normalizedY = normalizedY,
+                            normalizedX = focusPoint.indicatorX,
+                            normalizedY = focusPoint.indicatorY,
                             locked = lock,
                         )
                     }
@@ -234,7 +245,7 @@ fun CameraScreen(
             )
 
             if (
-                uiState.previewMode == PreviewMode.COLOR_NEGATIVE_CORRECTED &&
+                colorPlusControlsVisible &&
                 uiState.orangeMaskSamplingState == OrangeMaskSamplingState.ARMING
             ) {
                 OrangeMaskMarkerOverlay(
@@ -261,7 +272,7 @@ fun CameraScreen(
                 previewMode = uiState.previewMode,
                 onClick = onToggleMode,
             )
-            if (uiState.previewMode != PreviewMode.NORMAL) {
+            if (uiState.previewMode != PreviewMode.NORMAL && !allModesPreview) {
                 Button(onClick = onToggleSaveOutputMode) {
                     Text(
                         text = when (uiState.saveOutputMode) {
@@ -273,15 +284,20 @@ fun CameraScreen(
             }
         }
 
-        if (uiState.previewMode == PreviewMode.COLOR_NEGATIVE_CORRECTED) {
+        if (colorPlusControlsVisible) {
             OrangeMaskControls(
                 samplingState = uiState.orangeMaskSamplingState,
                 sample = uiState.orangeMaskSample,
                 onStartSampling = onStartOrangeMaskSampling,
                 onConfirmSample = {
-                    cameraGlView?.sampleOrangeMask(
+                    val samplePoint = mapToCameraPoint(
                         normalizedX = markerX,
                         normalizedY = markerY,
+                        allModesPreview = allModesPreview,
+                    )
+                    cameraGlView?.sampleOrangeMask(
+                        normalizedX = samplePoint.cameraX,
+                        normalizedY = samplePoint.cameraY,
                     ) { result ->
                         result
                             .onSuccess(onOrangeMaskSampled)
@@ -300,7 +316,7 @@ fun CameraScreen(
         }
 
         if (
-            uiState.previewMode == PreviewMode.COLOR_NEGATIVE_CORRECTED &&
+            colorPlusControlsVisible &&
             uiState.orangeMaskSample != null
         ) {
             OrangeMaskSampleInfo(
@@ -382,7 +398,10 @@ fun CameraScreen(
             isProcessing = uiState.isCapturing,
             onClick = captureClick@{
                 val captureMode = uiState.previewMode
-                val captureSaveOutputMode = if (captureMode == PreviewMode.NORMAL) {
+                val captureSaveOutputMode = if (
+                    captureMode == PreviewMode.NORMAL ||
+                    captureMode == PreviewMode.ALL_MODES
+                ) {
                     SaveOutputMode.PROCESSED_ONLY
                 } else {
                     uiState.saveOutputMode
@@ -816,8 +835,9 @@ private fun OrangeMaskMarkerOverlay(
 private fun FocusTouchOverlay(
     enabled: Boolean,
     indicator: FocusIndicator?,
+    allModesPreview: Boolean,
     exposure: Float,
-    onFocus: (Float, Float, IntSize, Boolean) -> Unit,
+    onFocus: (FocusPoint, IntSize, Boolean) -> Unit,
     onZoom: (Float) -> Unit,
     onExposureChange: (Float) -> Unit,
     onExposureDragStarted: () -> Unit,
@@ -918,9 +938,14 @@ private fun FocusTouchOverlay(
                 detectTapGestures(
                     onTap = { offset ->
                         if (size.width > 0 && size.height > 0 && !isExposureControlHit(offset)) {
+                            val normalizedX = (offset.x / size.width).coerceIn(0f, 1f)
+                            val normalizedY = (offset.y / size.height).coerceIn(0f, 1f)
                             onFocus(
-                                (offset.x / size.width).coerceIn(0f, 1f),
-                                (offset.y / size.height).coerceIn(0f, 1f),
+                                mapToCameraPoint(
+                                    normalizedX = normalizedX,
+                                    normalizedY = normalizedY,
+                                    allModesPreview = allModesPreview,
+                                ),
                                 size,
                                 false,
                             )
@@ -928,9 +953,14 @@ private fun FocusTouchOverlay(
                     },
                     onLongPress = { offset ->
                         if (size.width > 0 && size.height > 0 && !isExposureControlHit(offset)) {
+                            val normalizedX = (offset.x / size.width).coerceIn(0f, 1f)
+                            val normalizedY = (offset.y / size.height).coerceIn(0f, 1f)
                             onFocus(
-                                (offset.x / size.width).coerceIn(0f, 1f),
-                                (offset.y / size.height).coerceIn(0f, 1f),
+                                mapToCameraPoint(
+                                    normalizedX = normalizedX,
+                                    normalizedY = normalizedY,
+                                    allModesPreview = allModesPreview,
+                                ),
                                 size,
                                 true,
                             )
@@ -1053,6 +1083,41 @@ private fun ParameterSlider(
                 .height(28.dp),
         )
     }
+}
+
+private fun mapToCameraPoint(
+    normalizedX: Float,
+    normalizedY: Float,
+    allModesPreview: Boolean,
+): FocusPoint {
+    val indicatorX = normalizedX.coerceIn(0f, 1f)
+    val indicatorY = normalizedY.coerceIn(0f, 1f)
+    if (!allModesPreview) {
+        return FocusPoint(
+            indicatorX = indicatorX,
+            indicatorY = indicatorY,
+            cameraX = indicatorX,
+            cameraY = indicatorY,
+        )
+    }
+
+    val cameraX = if (indicatorX >= 0.5f) {
+        (indicatorX - 0.5f) * 2f
+    } else {
+        indicatorX * 2f
+    }
+    val cameraY = if (indicatorY >= 0.5f) {
+        (indicatorY - 0.5f) * 2f
+    } else {
+        indicatorY * 2f
+    }
+
+    return FocusPoint(
+        indicatorX = indicatorX,
+        indicatorY = indicatorY,
+        cameraX = cameraX.coerceIn(0f, 1f),
+        cameraY = cameraY.coerceIn(0f, 1f),
+    )
 }
 
 private const val EXPOSURE_MIN = -3f

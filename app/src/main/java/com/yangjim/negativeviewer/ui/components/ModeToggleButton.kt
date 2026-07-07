@@ -32,6 +32,7 @@ fun ModeToggleButton(
                 PreviewMode.COLOR_BASIC_INVERT -> "COLOR"
                 PreviewMode.BW_NEGATIVE -> "B&W"
                 PreviewMode.COLOR_NEGATIVE_CORRECTED -> "COLOR+"
+                PreviewMode.ALL_MODES -> "ALL"
             },
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
             style = MaterialTheme.typography.labelLarge,

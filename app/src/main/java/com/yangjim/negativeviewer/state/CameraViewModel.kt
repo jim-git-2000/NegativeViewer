@@ -23,13 +23,13 @@ class CameraViewModel : ViewModel() {
         _uiState.update { state ->
             state.copy(
                 previewMode = mode,
-                saveOutputMode = if (mode == PreviewMode.NORMAL) {
+                saveOutputMode = if (mode == PreviewMode.NORMAL || mode == PreviewMode.ALL_MODES) {
                     SaveOutputMode.PROCESSED_ONLY
                 } else {
                     state.saveOutputMode
                 },
                 lastError = if (
-                    mode == PreviewMode.COLOR_NEGATIVE_CORRECTED &&
+                    (mode == PreviewMode.COLOR_NEGATIVE_CORRECTED || mode == PreviewMode.ALL_MODES) &&
                     state.orangeMaskSample == null
                 ) {
                     "请先采样片基，未采样时按照COLOR普通反色预览"
@@ -49,7 +49,7 @@ class CameraViewModel : ViewModel() {
 
     fun toggleSaveOutputMode() {
         _uiState.update { state ->
-            if (state.previewMode == PreviewMode.NORMAL) {
+            if (state.previewMode == PreviewMode.NORMAL || state.previewMode == PreviewMode.ALL_MODES) {
                 state.copy(saveOutputMode = SaveOutputMode.PROCESSED_ONLY)
             } else {
                 state.copy(
@@ -150,7 +150,10 @@ class CameraViewModel : ViewModel() {
             state.copy(
                 orangeMaskSamplingState = OrangeMaskSamplingState.IDLE,
                 orangeMaskSample = null,
-                lastError = if (state.previewMode == PreviewMode.COLOR_NEGATIVE_CORRECTED) {
+                lastError = if (
+                    state.previewMode == PreviewMode.COLOR_NEGATIVE_CORRECTED ||
+                    state.previewMode == PreviewMode.ALL_MODES
+                ) {
                     "请先采样片基，未采样时按照COLOR普通反色预览"
                 } else {
                     null
