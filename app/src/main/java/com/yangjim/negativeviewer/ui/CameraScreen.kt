@@ -132,10 +132,11 @@ fun CameraScreen(
     var showToneControls by remember { mutableStateOf(false) }
     var showRgbControls by remember { mutableStateOf(false) }
     var focusIndicator by remember { mutableStateOf<FocusIndicator?>(null) }
+    var exposureDragActive by remember { mutableStateOf(false) }
 
-    LaunchedEffect(focusIndicator) {
+    LaunchedEffect(focusIndicator, exposureDragActive) {
         val indicator = focusIndicator
-        if (indicator != null && !indicator.locked) {
+        if (indicator != null && !indicator.locked && !exposureDragActive) {
             delay(3200)
             if (focusIndicator == indicator) {
                 focusIndicator = null
@@ -223,6 +224,12 @@ fun CameraScreen(
                     cameraXController.zoomBy(scaleFactor)
                 },
                 onExposureChange = onExposureChange,
+                onExposureDragStarted = {
+                    exposureDragActive = true
+                },
+                onExposureDragFinished = {
+                    exposureDragActive = false
+                },
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -813,6 +820,8 @@ private fun FocusTouchOverlay(
     onFocus: (Float, Float, IntSize, Boolean) -> Unit,
     onZoom: (Float) -> Unit,
     onExposureChange: (Float) -> Unit,
+    onExposureDragStarted: () -> Unit,
+    onExposureDragFinished: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var size by remember { mutableStateOf(IntSize.Zero) }
@@ -823,6 +832,8 @@ private fun FocusTouchOverlay(
     val controlHitSlopPx = with(density) { 22.dp.toPx() }
     val currentExposure by rememberUpdatedState(exposure)
     val currentOnExposureChange by rememberUpdatedState(onExposureChange)
+    val currentOnExposureDragStarted by rememberUpdatedState(onExposureDragStarted)
+    val currentOnExposureDragFinished by rememberUpdatedState(onExposureDragFinished)
     var exposureDragActive by remember { mutableStateOf(false) }
     var exposureDragStartY by remember { mutableStateOf(0f) }
     var exposureDragStartValue by remember { mutableStateOf(0f) }
@@ -871,28 +882,34 @@ private fun FocusTouchOverlay(
                     }
 
                     down.consume()
+                    currentOnExposureDragStarted()
                     exposureDragStartY = down.position.y
                     exposureDragStartValue = currentExposure
 
-                    while (exposureDragActive) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull { it.id == down.id }
-                        if (change == null || !change.pressed) {
-                            exposureDragActive = false
-                            continue
-                        }
+                    try {
+                        while (exposureDragActive) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id }
+                            if (change == null || !change.pressed) {
+                                exposureDragActive = false
+                                continue
+                            }
 
-                        val geometry = exposureGeometry()
-                        if (exposureDragActive && geometry != null) {
-                            val trackHeight = (geometry.trackBottom - geometry.trackTop).coerceAtLeast(1f)
-                            val exposureDelta = (exposureDragStartY - change.position.y) /
-                                trackHeight * (EXPOSURE_MAX - EXPOSURE_MIN)
-                            currentOnExposureChange(
-                                (exposureDragStartValue + exposureDelta)
-                                    .coerceIn(EXPOSURE_MIN, EXPOSURE_MAX),
-                            )
-                            change.consume()
+                            val geometry = exposureGeometry()
+                            if (geometry != null) {
+                                val trackHeight = (geometry.trackBottom - geometry.trackTop).coerceAtLeast(1f)
+                                val exposureDelta = (exposureDragStartY - change.position.y) /
+                                    trackHeight * (EXPOSURE_MAX - EXPOSURE_MIN)
+                                currentOnExposureChange(
+                                    (exposureDragStartValue + exposureDelta)
+                                        .coerceIn(EXPOSURE_MIN, EXPOSURE_MAX),
+                                )
+                                change.consume()
+                            }
                         }
+                    } finally {
+                        exposureDragActive = false
+                        currentOnExposureDragFinished()
                     }
                 }
             }
