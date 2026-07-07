@@ -229,6 +229,7 @@ class CameraRenderer(
             setInt("uCameraTexture", 0)
             setInt("uPreviewMode", mode.ordinal)
             setInt("uHasOrangeMaskSample", if (sample != null) 1 else 0)
+            setFloat("uExposure", processingParams.exposure)
             setFloat("uBrightness", processingParams.brightness)
             setFloat("uContrast", processingParams.contrast)
             setFloat("uGamma", processingParams.gamma.coerceAtLeast(MIN_GAMMA))
@@ -468,6 +469,7 @@ class CameraRenderer(
             uniform samplerExternalOES uCameraTexture;
             uniform int uPreviewMode;
             uniform int uHasOrangeMaskSample;
+            uniform float uExposure;
             uniform float uBrightness;
             uniform float uContrast;
             uniform float uGamma;
@@ -477,6 +479,7 @@ class CameraRenderer(
             varying vec2 vTexCoord;
 
             vec3 applyTone(vec3 color) {
+                color *= pow(2.0, uExposure);
                 color = (color - vec3(0.5)) * uContrast + vec3(0.5);
                 color += vec3(uBrightness);
                 color = clamp(color, 0.0, 1.0);

@@ -191,7 +191,8 @@ class NegativeBitmapProcessor(
     }
 
     private fun applyTone(value: Float, processingParams: ProcessingParams): Int {
-        val contrasted = (value - 0.5f) * processingParams.contrast + 0.5f
+        val exposed = value * 2f.pow(processingParams.exposure)
+        val contrasted = (exposed - 0.5f) * processingParams.contrast + 0.5f
         val brightened = contrasted + processingParams.brightness
         val clamped = brightened.coerceIn(0f, 1f)
         val gamma = processingParams.gamma.coerceAtLeast(MIN_GAMMA)

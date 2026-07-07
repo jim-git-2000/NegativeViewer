@@ -29,6 +29,7 @@ data class OrangeMaskSample(
 )
 
 data class ProcessingParams(
+    val exposure: Float = 0f,
     val brightness: Float = 0f,
     val contrast: Float = 1f,
     val gamma: Float = 1f,

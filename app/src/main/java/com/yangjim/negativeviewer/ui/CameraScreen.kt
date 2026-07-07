@@ -38,6 +38,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,6 +49,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -86,10 +88,17 @@ private data class FocusIndicator(
     val locked: Boolean,
 )
 
+private data class ExposureControlGeometry(
+    val trackX: Float,
+    val trackTop: Float,
+    val trackBottom: Float,
+)
+
 @Composable
 fun CameraScreen(
     uiState: CameraUiState,
     onToggleMode: () -> Unit,
+    onExposureChange: (Float) -> Unit,
     onBrightnessChange: (Float) -> Unit,
     onContrastChange: (Float) -> Unit,
     onGammaChange: (Float) -> Unit,
@@ -125,7 +134,7 @@ fun CameraScreen(
     LaunchedEffect(focusIndicator) {
         val indicator = focusIndicator
         if (indicator != null && !indicator.locked) {
-            delay(1200)
+            delay(3200)
             if (focusIndicator == indicator) {
                 focusIndicator = null
             }
@@ -187,6 +196,7 @@ fun CameraScreen(
             FocusTouchOverlay(
                 enabled = !orangeMaskMarkerActive,
                 indicator = focusIndicator,
+                exposure = uiState.processingParams.exposure,
                 onFocus = { normalizedX, normalizedY, previewSize, lock ->
                     val focusStarted = cameraXController.focusAt(
                         normalizedX = normalizedX,
@@ -210,6 +220,7 @@ fun CameraScreen(
                 onZoom = { scaleFactor ->
                     cameraXController.zoomBy(scaleFactor)
                 },
+                onExposureChange = onExposureChange,
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -299,6 +310,7 @@ fun CameraScreen(
                 processingParams = uiState.processingParams,
                 showTone = showToneControls,
                 showRgb = showActiveRgbControls,
+                onExposureChange = onExposureChange,
                 onBrightnessChange = onBrightnessChange,
                 onContrastChange = onContrastChange,
                 onGammaChange = onGammaChange,
@@ -533,6 +545,7 @@ private fun ProcessingControls(
     processingParams: ProcessingParams,
     showTone: Boolean,
     showRgb: Boolean,
+    onExposureChange: (Float) -> Unit,
     onBrightnessChange: (Float) -> Unit,
     onContrastChange: (Float) -> Unit,
     onGammaChange: (Float) -> Unit,
@@ -559,6 +572,12 @@ private fun ProcessingControls(
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             if (showTone) {
+                ParameterSlider(
+                    label = "Exposure",
+                    value = processingParams.exposure,
+                    valueRange = EXPOSURE_MIN..EXPOSURE_MAX,
+                    onValueChange = onExposureChange,
+                )
                 ParameterSlider(
                     label = "Brightness",
                     value = processingParams.brightness,
@@ -788,15 +807,89 @@ private fun OrangeMaskMarkerOverlay(
 private fun FocusTouchOverlay(
     enabled: Boolean,
     indicator: FocusIndicator?,
+    exposure: Float,
     onFocus: (Float, Float, IntSize, Boolean) -> Unit,
     onZoom: (Float) -> Unit,
+    onExposureChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var size by remember { mutableStateOf(IntSize.Zero) }
+    val density = LocalDensity.current
+    val controlOffsetPx = with(density) { 44.dp.toPx() }
+    val controlEdgePaddingPx = with(density) { 18.dp.toPx() }
+    val controlHalfHeightPx = with(density) { 58.dp.toPx() }
+    val controlHitSlopPx = with(density) { 28.dp.toPx() }
+    val currentExposure by rememberUpdatedState(exposure)
+    val currentOnExposureChange by rememberUpdatedState(onExposureChange)
+    var exposureDragActive by remember { mutableStateOf(false) }
+    var exposureDragStartY by remember { mutableStateOf(0f) }
+    var exposureDragStartValue by remember { mutableStateOf(0f) }
+
+    fun exposureGeometry(): ExposureControlGeometry? {
+        val current = indicator ?: return null
+        if (size.width <= 0 || size.height <= 0) return null
+
+        val centerX = current.normalizedX * size.width
+        val centerY = current.normalizedY * size.height
+        val side = if (centerX + controlOffsetPx + controlEdgePaddingPx <= size.width) 1f else -1f
+        val maxTrackX = (size.width - controlEdgePaddingPx).coerceAtLeast(controlEdgePaddingPx)
+        val trackX = (centerX + side * controlOffsetPx)
+            .coerceIn(controlEdgePaddingPx, maxTrackX)
+        val availableHeight = size.height - 2f * controlEdgePaddingPx
+        if (availableHeight <= 1f) return null
+        val trackHeight = minOf(controlHalfHeightPx * 2f, availableHeight)
+        val trackTop = (centerY - trackHeight / 2f)
+            .coerceIn(controlEdgePaddingPx, size.height - controlEdgePaddingPx - trackHeight)
+        val trackBottom = trackTop + trackHeight
+
+        return ExposureControlGeometry(
+            trackX = trackX,
+            trackTop = trackTop,
+            trackBottom = trackBottom,
+        )
+    }
+
+    fun isExposureControlHit(offset: Offset): Boolean {
+        val geometry = exposureGeometry() ?: return false
+        return kotlin.math.abs(offset.x - geometry.trackX) <= controlHitSlopPx &&
+            offset.y >= geometry.trackTop - controlHitSlopPx &&
+            offset.y <= geometry.trackBottom + controlHitSlopPx
+    }
 
     Canvas(
         modifier = modifier
             .onSizeChanged { size = it }
+            .pointerInput(enabled, indicator) {
+                if (!enabled) return@pointerInput
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        exposureDragActive = isExposureControlHit(offset)
+                        if (exposureDragActive) {
+                            exposureDragStartY = offset.y
+                            exposureDragStartValue = currentExposure
+                        }
+                    },
+                    onDragEnd = {
+                        exposureDragActive = false
+                    },
+                    onDragCancel = {
+                        exposureDragActive = false
+                    },
+                    onDrag = { change, _ ->
+                        val geometry = exposureGeometry()
+                        if (exposureDragActive && geometry != null) {
+                            val trackHeight = (geometry.trackBottom - geometry.trackTop).coerceAtLeast(1f)
+                            val exposureDelta = (exposureDragStartY - change.position.y) /
+                                trackHeight * (EXPOSURE_MAX - EXPOSURE_MIN)
+                            currentOnExposureChange(
+                                (exposureDragStartValue + exposureDelta)
+                                    .coerceIn(EXPOSURE_MIN, EXPOSURE_MAX),
+                            )
+                            change.consume()
+                        }
+                    },
+                )
+            }
             .pointerInput(enabled) {
                 if (!enabled) return@pointerInput
                 detectTapGestures(
@@ -852,6 +945,65 @@ private fun FocusTouchOverlay(
                 cap = StrokeCap.Round,
             )
         }
+
+        val geometry = exposureGeometry() ?: return@Canvas
+        val trackHeight = (geometry.trackBottom - geometry.trackTop).coerceAtLeast(1f)
+        val exposureProgress = ((exposure - EXPOSURE_MIN) / (EXPOSURE_MAX - EXPOSURE_MIN))
+            .coerceIn(0f, 1f)
+        val sunY = geometry.trackBottom - exposureProgress * trackHeight
+        val sunCenter = Offset(geometry.trackX, sunY)
+        val sunColor = Color(0xFFFFD54F)
+        val trackColor = Color.White.copy(alpha = 0.72f)
+        val radius = 6.dp.toPx()
+        val rayInner = 10.dp.toPx()
+        val rayOuter = 14.dp.toPx()
+
+        drawLine(
+            color = trackColor,
+            start = Offset(geometry.trackX, geometry.trackTop),
+            end = Offset(geometry.trackX, geometry.trackBottom),
+            strokeWidth = 2.dp.toPx(),
+            cap = StrokeCap.Round,
+        )
+        drawCircle(
+            color = Color.Black.copy(alpha = 0.45f),
+            radius = 19.dp.toPx(),
+            center = sunCenter,
+        )
+        drawCircle(
+            color = sunColor,
+            radius = radius,
+            center = sunCenter,
+            style = Stroke(width = 2.dp.toPx()),
+        )
+        drawLine(
+            color = sunColor,
+            start = Offset(sunCenter.x - rayOuter, sunCenter.y),
+            end = Offset(sunCenter.x - rayInner, sunCenter.y),
+            strokeWidth = 2.dp.toPx(),
+            cap = StrokeCap.Round,
+        )
+        drawLine(
+            color = sunColor,
+            start = Offset(sunCenter.x + rayInner, sunCenter.y),
+            end = Offset(sunCenter.x + rayOuter, sunCenter.y),
+            strokeWidth = 2.dp.toPx(),
+            cap = StrokeCap.Round,
+        )
+        drawLine(
+            color = sunColor,
+            start = Offset(sunCenter.x, sunCenter.y - rayOuter),
+            end = Offset(sunCenter.x, sunCenter.y - rayInner),
+            strokeWidth = 2.dp.toPx(),
+            cap = StrokeCap.Round,
+        )
+        drawLine(
+            color = sunColor,
+            start = Offset(sunCenter.x, sunCenter.y + rayInner),
+            end = Offset(sunCenter.x, sunCenter.y + rayOuter),
+            strokeWidth = 2.dp.toPx(),
+            cap = StrokeCap.Round,
+        )
     }
 }
 
@@ -879,5 +1031,7 @@ private fun ParameterSlider(
     }
 }
 
+private const val EXPOSURE_MIN = -3f
+private const val EXPOSURE_MAX = 3f
 private const val PREVIEW_ASPECT_RATIO = 3f / 4f
 private const val PREVIEW_CAPTURE_JPEG_QUALITY = 95

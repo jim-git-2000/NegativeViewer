@@ -95,6 +95,7 @@ private fun NegativeViewerApp(cameraViewModel: CameraViewModel) {
         CameraScreen(
             uiState = uiState,
             onToggleMode = cameraViewModel::togglePreviewMode,
+            onExposureChange = cameraViewModel::setExposure,
             onBrightnessChange = cameraViewModel::setBrightness,
             onContrastChange = cameraViewModel::setContrast,
             onGammaChange = cameraViewModel::setGamma,

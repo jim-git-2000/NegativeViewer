@@ -69,6 +69,12 @@ class CameraViewModel : ViewModel() {
         }
     }
 
+    fun setExposure(value: Float) {
+        updateProcessingParams {
+            copy(exposure = value)
+        }
+    }
+
     fun setContrast(value: Float) {
         updateProcessingParams {
             copy(contrast = value)
@@ -102,6 +108,7 @@ class CameraViewModel : ViewModel() {
     fun resetTone() {
         updateProcessingParams {
             copy(
+                exposure = ProcessingParams.Default.exposure,
                 brightness = ProcessingParams.Default.brightness,
                 contrast = ProcessingParams.Default.contrast,
                 gamma = ProcessingParams.Default.gamma,
