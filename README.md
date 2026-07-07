@@ -5,11 +5,12 @@
 ## 功能简介
 
 - 实时相机预览，取景区域为 3:4 比例，适合常见底片翻拍构图
-- 支持 `NORMAL`、`COLOR`、`B&W`、`COLOR+` 四种预览模式
+- 支持 `NORMAL`、`COLOR`、`B&W`、`COLOR+`、`ALL` 五种预览模式
+- `ALL` 模式以 2x2 四宫格同时显示四种图像效果，并固定保存四宫格结果
 - `COLOR+` 模式支持片基采样、重新采样、重置片基，并显示采样色块与 RGB 数值
-- 支持 Tone 调整：`Brightness`、`Contrast`、`Gamma`
+- 支持 Tone 调整：`Exposure`、`Brightness`、`Contrast`、`Gamma`
 - 支持 RGB 三通道增益微调
-- 支持点击对焦；长按可保持当前对焦/测光区域不自动取消
+- 支持点击对焦；长按可保持当前对焦/测光区域不自动取消；对焦环旁可拖动小太阳调节曝光
 - 拍照后可保存处理结果，非 `NORMAL` 模式支持单图保存或原图 + 处理图拼接保存
 - 图片保存到系统相册 `Pictures/NegativeViewer/`
 
@@ -24,8 +25,8 @@
 
 ## 发布信息
 
-- 当前发布版本：`v1.0.0`
-- Release APK 命名：`NegativeViewer-Android-v1.0.0.apk`
+- 当前发布版本：`v1.1.0`
+- Release APK 命名：`NegativeViewer-Android-v1.1.0.apk`
 - 适用平台：Android
 - 发布方式：推送 `v*` 标签后自动构建 release APK，并创建 GitHub Release
 
@@ -40,13 +41,13 @@
 默认产物路径：
 
 ```text
-app/build/outputs/apk/release/NegativeViewer-Android-v1.0.0.apk
+app/build/outputs/apk/release/NegativeViewer-Android-v1.1.0.apk
 ```
 
 ## 安装
 
 ```bash
-adb install -r app/build/outputs/apk/release/NegativeViewer-Android-v1.0.0.apk
+adb install -r app/build/outputs/apk/release/NegativeViewer-Android-v1.1.0.apk
 ```
 
 ## 当前限制

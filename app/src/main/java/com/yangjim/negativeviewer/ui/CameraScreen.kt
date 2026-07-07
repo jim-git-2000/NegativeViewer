@@ -933,7 +933,7 @@ private fun FocusTouchOverlay(
                     }
                 }
             }
-            .pointerInput(enabled) {
+            .pointerInput(enabled, allModesPreview) {
                 if (!enabled) return@pointerInput
                 detectTapGestures(
                     onTap = { offset ->
