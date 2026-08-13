@@ -76,18 +76,19 @@ jobs:
         with:
           generate_release_notes: false
           body: |
-            Negative Viewer Android v1.0.0 发布。
+            Negative Viewer Android ${{ github.ref_name }} 发布。
 
             版本：${{ github.ref_name }}
             平台：Android
 
             本版本面向胶片底片翻拍预览与拍摄保存，主要包含：
-            - 支持 NORMAL、COLOR、B&W、COLOR+ 四种预览模式
+            - 支持 NORMAL、COLOR、B&W、COLOR+、ALL 五种预览模式
+            - ALL 模式支持四宫格预览与保存
             - COLOR+ 模式支持片基采样、重新采样、重置片基，并显示采样色块与 RGB 数值
-            - 支持 Tone 参数调整：Brightness / Contrast / Gamma
+            - 支持 Tone 参数调整：Exposure / Brightness / Contrast / Gamma
             - 支持 RGB 三通道增益调节
             - 支持点击对焦；长按可保持当前对焦/测光区域不自动取消
-            - 支持单图保存和原图 + 处理图拼接保存
+            - 支持 OpenGL 预览帧单图保存和原始预览帧 + 处理预览帧拼接保存
 
             说明：
             - Release 附件中的 APK 适用于 Android 设备
