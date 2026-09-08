@@ -8,12 +8,13 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -21,12 +22,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.yangjim.negativeviewer.state.CameraViewModel
 import com.yangjim.negativeviewer.ui.CameraScreen
+import com.yangjim.negativeviewer.ui.NegativeViewerTheme
 import com.yangjim.negativeviewer.ui.PermissionScreen
 
 class MainActivity : ComponentActivity() {
@@ -34,6 +35,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(0xFF101113.toInt()),
+        )
         cameraViewModel.setCameraPermission(hasCameraPermission())
 
         setContent {
@@ -54,20 +59,6 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.CAMERA,
         ) == PackageManager.PERMISSION_GRANTED
     }
-}
-
-@Composable
-private fun NegativeViewerTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = androidx.compose.material3.darkColorScheme(
-            primary = Color(0xFFE0E0E0),
-            background = Color(0xFF101010),
-            surface = Color(0xFF101010),
-            onBackground = Color(0xFFF2F2F2),
-            onSurface = Color(0xFFF2F2F2),
-        ),
-        content = content,
-    )
 }
 
 @Composable

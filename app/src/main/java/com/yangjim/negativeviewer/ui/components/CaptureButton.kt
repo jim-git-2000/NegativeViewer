@@ -1,26 +1,18 @@
 package com.yangjim.negativeviewer.ui.components
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -30,60 +22,27 @@ fun CaptureButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val rotation = rememberInfiniteTransition(label = "capture_processing").animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 900, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "capture_ring_rotation",
-    ).value
-
     Surface(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.size(78.dp),
+        modifier = modifier.size(76.dp).semantics {
+            contentDescription = "保存当前画面到相册"
+            stateDescription = if (isProcessing) "正在保存" else "就绪"
+        },
         shape = CircleShape,
-        color = Color.Transparent,
-        border = BorderStroke(4.dp, Color.White.copy(alpha = if (enabled) 0.95f else 0.45f)),
+        color = MaterialTheme.colorScheme.background,
+        border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = if (enabled) 1f else 0.4f)),
     ) {
         Box(contentAlignment = Alignment.Center) {
-            if (isProcessing) {
-                Canvas(
-                    modifier = Modifier
-                        .size(74.dp)
-                        .rotate(rotation),
-                ) {
-                    val strokeWidth = 4.dp.toPx()
-                    val stroke = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-                    val inset = strokeWidth / 2f
-                    val arcSize = size.copy(
-                        width = size.width - strokeWidth,
-                        height = size.height - strokeWidth,
-                    )
-                    val topLeft = Offset(inset, inset)
-                    drawArc(
-                        brush = Brush.sweepGradient(
-                            0f to Color(0xFFB00000),
-                            0.5f to Color(0xFFFF2A2A),
-                            1f to Color(0xFFB00000),
-                        ),
-                        startAngle = -90f,
-                        sweepAngle = 180f,
-                        useCenter = false,
-                        topLeft = topLeft,
-                        size = arcSize,
-                        style = stroke,
-                    )
-                }
-            }
             Surface(
-                modifier = Modifier.size(56.dp),
+                modifier = Modifier.size(60.dp),
                 shape = CircleShape,
-                color = Color.White.copy(alpha = if (enabled) 0.92f else 0.38f),
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = if (enabled) 1f else 0.25f),
                 content = {},
             )
+            if (isProcessing) {
+                CircularProgressIndicator(Modifier.size(34.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
+            }
         }
     }
 }
