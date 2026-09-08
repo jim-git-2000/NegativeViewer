@@ -27,10 +27,16 @@
 
 ## 发布信息
 
-- 当前代码版本：`v1.1.0`
-- Release APK 命名：`NegativeViewer-Android-v1.1.0.apk`
+- 当前候选版本：`v1.1.1`
+- Release APK 命名：`NegativeViewer-Android-v1.1.1.apk`
 - 适用平台：Android
 - 发布方式：推送 `v*` 标签后自动构建 release APK，并创建 GitHub Release
+
+## v1.1.1 更新内容
+
+- 重构相机界面的深色视觉主题，优化模式切换、影调/RGB 控制和快门反馈。
+- 为横屏重新排布操作区，并适配系统状态栏和导航栏的边到边显示。
+- 为主要操作补充无障碍描述；不改变预览处理与保存链路。
 
 ## 构建
 
