@@ -138,12 +138,13 @@ fun CameraScreen(
     var markerY by remember { mutableStateOf(0.5f) }
     var showToneControls by remember { mutableStateOf(false) }
     var showRgbControls by remember { mutableStateOf(false) }
+    var showOrangeMaskControls by remember { mutableStateOf(false) }
     var focusIndicator by remember { mutableStateOf<FocusIndicator?>(null) }
     var exposureDragActive by remember { mutableStateOf(false) }
     val allModesPreview = uiState.previewMode == PreviewMode.ALL_MODES
     val colorPlusControlsVisible =
         uiState.previewMode == PreviewMode.COLOR_NEGATIVE_CORRECTED || allModesPreview
-    val samplingMarkerActive = colorPlusControlsVisible &&
+    val samplingMarkerActive = colorPlusControlsVisible && showOrangeMaskControls &&
         uiState.orangeMaskSamplingState == OrangeMaskSamplingState.ARMING
     val showActiveRgbControls = showRgbControls && uiState.previewMode != PreviewMode.BW_NEGATIVE
     val showProcessingControls = uiState.previewMode != PreviewMode.NORMAL &&
@@ -183,7 +184,7 @@ fun CameraScreen(
         preview = {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val previewWidth = minOf(maxWidth, maxHeight * PREVIEW_ASPECT_RATIO)
-                val panelHeight = maxHeight * 0.7f
+                val panelHeight = maxHeight * 0.5f
                 Box(
                     modifier = Modifier
                         .align(Alignment.Center)
@@ -209,9 +210,7 @@ fun CameraScreen(
                         modifier = Modifier.fillMaxSize(),
                     )
 
-                    val orangeMaskMarkerActive =
-                        colorPlusControlsVisible &&
-                            uiState.orangeMaskSamplingState == OrangeMaskSamplingState.ARMING
+                    val orangeMaskMarkerActive = samplingMarkerActive
 
                     FocusTouchOverlay(
                         enabled = !orangeMaskMarkerActive,
@@ -251,10 +250,7 @@ fun CameraScreen(
                         modifier = Modifier.fillMaxSize(),
                     )
 
-                    if (
-                        colorPlusControlsVisible &&
-                        uiState.orangeMaskSamplingState == OrangeMaskSamplingState.ARMING
-                    ) {
+                    if (samplingMarkerActive) {
                         OrangeMaskMarkerOverlay(
                             markerX = markerX,
                             markerY = markerY,
@@ -266,16 +262,17 @@ fun CameraScreen(
                         )
                     }
                 }
-                if (colorPlusControlsVisible && !showProcessingControls) {
+                if (colorPlusControlsVisible && showOrangeMaskControls) {
                     Surface(
-                        modifier = Modifier.align(Alignment.TopCenter)
+                        modifier = Modifier.align(Alignment.BottomCenter)
                             .padding(horizontal = 12.dp, vertical = 8.dp)
-                            .widthIn(max = 420.dp),
+                            .widthIn(max = 360.dp).fillMaxWidth().heightIn(max = panelHeight),
                         shape = MaterialTheme.shapes.medium,
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     ) {
-                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(Modifier.verticalScroll(rememberScrollState()).padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             OrangeMaskControls(
                                 samplingState = uiState.orangeMaskSamplingState,
                                 sample = uiState.orangeMaskSample,
@@ -328,7 +325,7 @@ fun CameraScreen(
                         },
                         modifier = Modifier.align(Alignment.BottomCenter)
                             .padding(horizontal = 12.dp, vertical = 8.dp)
-                            .widthIn(max = 420.dp).fillMaxWidth().heightIn(max = panelHeight),
+                            .widthIn(max = 360.dp).fillMaxWidth().heightIn(max = panelHeight),
                     )
                 }
             }
@@ -339,17 +336,16 @@ fun CameraScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                if (samplingMarkerActive) {
-                    Text("移动取样点后，点击上方确认采样", style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary, textAlign = TextAlign.Center)
-                } else if (uiState.previewMode != PreviewMode.NORMAL) {
+                if (uiState.previewMode != PreviewMode.NORMAL) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         ControlChip(
                             text = "影调",
                             selected = showToneControls,
+                            compact = true,
                             onClick = {
                                 showToneControls = !showToneControls
                                 showRgbControls = false
+                                showOrangeMaskControls = false
                             },
                             modifier = Modifier.weight(1f),
                         )
@@ -357,9 +353,24 @@ fun CameraScreen(
                             ControlChip(
                                 text = "RGB 色彩",
                                 selected = showRgbControls,
+                                compact = true,
                                 onClick = {
                                     showRgbControls = !showRgbControls
                                     showToneControls = false
+                                    showOrangeMaskControls = false
+                                },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        if (colorPlusControlsVisible) {
+                            ControlChip(
+                                text = "片基校正",
+                                selected = showOrangeMaskControls,
+                                compact = true,
+                                onClick = {
+                                    showOrangeMaskControls = !showOrangeMaskControls
+                                    showToneControls = false
+                                    showRgbControls = false
                                 },
                                 modifier = Modifier.weight(1f),
                             )
@@ -593,8 +604,8 @@ private fun ProcessingControls(
         Column(
             modifier = Modifier
                 .verticalScroll(scrollState)
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(if (showTone) "影调调节" else "RGB 色彩", Modifier.weight(1f),
@@ -1017,21 +1028,25 @@ private fun ParameterSlider(
     valueRange: ClosedFloatingPointRange<Float>,
     onValueChange: (Float) -> Unit,
 ) {
-    Column {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(label, Modifier.weight(1f), style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(String.format(Locale.getDefault(), "%.2f", value),
-                style = MaterialTheme.typography.labelMedium, fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.primary)
-        }
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(label, Modifier.width(60.dp), style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
         Slider(
             value = value.coerceIn(valueRange.start, valueRange.endInclusive),
             onValueChange = onValueChange,
             valueRange = valueRange,
             colors = SliderDefaults.colors(inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant),
-            modifier = Modifier.fillMaxWidth().height(48.dp).semantics { contentDescription = label },
+            modifier = Modifier.weight(1f).height(48.dp).semantics { contentDescription = label },
         )
+        Text(String.format(Locale.getDefault(), "%.2f", value),
+            modifier = Modifier.width(44.dp),
+            textAlign = TextAlign.End,
+            style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.primary)
     }
 }
 
