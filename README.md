@@ -27,10 +27,15 @@
 
 ## 发布信息
 
-- 当前候选版本：`v1.1.2`
-- Release APK 命名：`NegativeViewer-Android-v1.1.2.apk`
+- 当前候选版本：`v1.4.0`
+- Release APK 命名：`NegativeViewer-Android-v1.4.0.apk`
 - 适用平台：Android
 - 发布方式：推送 `v*` 标签后自动构建 release APK，并创建 GitHub Release
+
+## v1.4.0 更新内容
+
+- 包含影调、RGB 色彩面板的紧凑布局和片基校正折叠入口。
+- 更新 release 构建的 Android SDK 安装步骤，移除对已停供 `tools` 包的默认依赖。
 
 ## v1.1.2 更新内容
 
